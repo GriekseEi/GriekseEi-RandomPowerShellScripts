@@ -23,12 +23,12 @@ $SPIKEOUT_STEAM_INPUT_CONFIG_URI    = 'https://raw.githubusercontent.com/Griekse
 $SPIKEOUT_ICO_URI                   = 'https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/feature/init/Setup-SpikeOut/resources/spikeout.ico'
 $SPIKEOFE_ICO_URI                   = 'https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/feature/init/Setup-SpikeOut/resources/spikeofe.ico'
 
-$script:TYPE_MAP       = [byte] 0
-$script:TYPE_STRING    = [byte] 1
-$script:TYPE_INT       = [byte] 2
-$script:TYPE_FLOAT     = [byte] 3
-$script:TYPE_LONG      = [byte] 7
-$script:TYPE_MAPEND    = [byte] 8
+$global:TYPE_MAP       = [byte] 0
+$global:TYPE_STRING    = [byte] 1
+$global:TYPE_INT       = [byte] 2
+$global:TYPE_FLOAT     = [byte] 3
+$global:TYPE_LONG      = [byte] 7
+$global:TYPE_MAPEND    = [byte] 8
 
 #endregion
 
@@ -98,7 +98,7 @@ class BufferReader {
     }
 
     [string] ReadNextString( [System.Text.Encoding] $Encoding) {
-        $nullTerminator = [System.Array]::IndexOf($this.Buffer, $script:TYPE_MAP, $this.Offset)
+        $nullTerminator = [System.Array]::IndexOf($this.Buffer, $global:TYPE_MAP, $this.Offset)
 
         if ($nullTerminator -eq -1) {
             throw [System.IndexOutOfRangeException] "Could not find null terminating byte for string"
@@ -183,7 +183,7 @@ function Get-NextMapItem {
     param([BufferReader] $Buffer)
 
     $typeByte = $Buffer.ReadNextByte()
-    if ($typeByte -eq $script:TYPE_MAPEND) {
+    if ($typeByte -eq $global:TYPE_MAPEND) {
         return @{
             Type = $typeByte
         }
@@ -193,19 +193,19 @@ function Get-NextMapItem {
     $value;
 
     switch ($typeByte) {
-        $script:TYPE_MAP {
+        $global:TYPE_MAP {
             $value = Get-NextMap -Buffer $Buffer; break
         }
-        $script:TYPE_STRING {
+        $global:TYPE_STRING {
             $value = $buffer.ReadNextString([System.Text.Encoding]::UTF8); break;
         }
-        $script:TYPE_INT {
+        $global:TYPE_INT {
             $value = $Buffer.ReadNextUInt32LE(); break;
         }
-        $script:TYPE_FLOAT {
+        $global:TYPE_FLOAT {
             $value = $Buffer.ReadNextFloatLE(); break;
         }
-        $script:TYPE_LONG {
+        $global:TYPE_LONG {
             $value = $Buffer.ReadNextUInt64LE(); break;
         }
         default {
@@ -229,7 +229,7 @@ function Get-NextMap {
 
     while ($true) {
         $mapItem = Get-NextMapItem -Buffer $Buffer
-        if ($mapItem.Type -eq $script:TYPE_MAPEND) {
+        if ($mapItem.Type -eq $global:TYPE_MAPEND) {
             break
         }
 
@@ -261,12 +261,12 @@ function Add-String {
     )
 
     $valArr = $Encoding.GetBytes($Value)
-    if ([System.Array]::IndexOf($valArr, $script:TYPE_MAP) -ne -1) {
+    if ([System.Array]::IndexOf($valArr, $global:TYPE_MAP) -ne -1) {
         throw [System.InvalidOperationException] "Strings in VDF files cannot have null chars!"
     }
 
     $Contents.AddRange($valArr)
-    $Contents.Add($script:TYPE_MAP)
+    $Contents.Add($global:TYPE_MAP)
 }
 
 function Add-Number {
@@ -294,31 +294,31 @@ function Add-Map {
 
         switch ($value.GetType().Name) {
             'UInt32' {
-                $Contents.Add($script:TYPE_INT)
+                $Contents.Add($global:TYPE_INT)
                 Add-String -Value $key -Contents $Contents -Encoding ([System.Text.Encoding]::GetEncoding('ISO-8859-1'))
                 Add-Number -Value $value -Contents $Contents
                 break
             }
             'UInt64' {
-                $Contents.Add($script:TYPE_LONG)
+                $Contents.Add($global:TYPE_LONG)
                 Add-String -Value $key -Contents $Contents -Encoding ([System.Text.Encoding]::GetEncoding('ISO-8859-1'))
                 Add-Number -Value $value -Contents $Contents
                 break
             }
             'Single' {
-                $Contents.Add($script:TYPE_FLOAT)
+                $Contents.Add($global:TYPE_FLOAT)
                 Add-String -Value $key -Contents $Contents -Encoding ([System.Text.Encoding]::GetEncoding('ISO-8859-1'))
                 Add-Number -Value $value -Contents $Contents
                 break
             }
             'String' {
-                $Contents.Add($script:TYPE_STRING)
+                $Contents.Add($global:TYPE_STRING)
                 Add-String -Value $key -Contents $Contents -Encoding ([System.Text.Encoding]::GetEncoding('ISO-8859-1'))
                 Add-String -Value $value -Contents $Contents -Encoding ([System.Text.Encoding]::UTF8)
                 break
             }
             'SortedList`2' {
-                $Contents.Add($script:TYPE_MAP)
+                $Contents.Add($global:TYPE_MAP)
                 Add-String -Value $key -Contents $Contents -Encoding ([System.Text.Encoding]::GetEncoding('ISO-8859-1'))
                 Add-Map -Map $value -Contents $Contents
                 break
@@ -329,7 +329,7 @@ function Add-Map {
         }
     }
 
-    $Contents.Add($script:TYPE_MAPEND)
+    $Contents.Add($global:TYPE_MAPEND)
 }
 
 function ConvertTo-BinaryVDF {
