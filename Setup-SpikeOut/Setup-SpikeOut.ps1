@@ -575,8 +575,9 @@ function New-SteamShortcuts {
         Write-Information "shortcuts.vdf not yet made in Steam userdata config. Creating a new default shortcuts file..."
 
         # As we're dealing with a binary file, we have to initialize a default file with a byte array
-        $emptyShortcutsVdf = [byte[]] @(0, 115, 104, 111, 114, 116, 99, 117, 116, 115, 0, 8, 8)
-        $null = New-Item -Path $shortcutsPath -Value $emptyShortcutsVdf -ItemType File
+        $defaultShortcutsValue = [byte[]] @(0, 115, 104, 111, 114, 116, 99, 117, 116, 115, 0, 8, 8)
+        $null = New-Item -Path $shortcutsPath -ItemType File
+        [IO.File]::WriteAllBytes($shortcutsPath, $defaultShortcutsValue)
     }
 
     # Create backup of shortcuts.vdf just in case
