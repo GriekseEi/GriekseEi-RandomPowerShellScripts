@@ -602,7 +602,7 @@ function New-SteamShortcuts {
 	# Download icons to a new icons folder in the Supermodel directory
 	$icoDirPath = Join-Path $SupermodelPath "Icons"
 	if (-not(Test-Path $icoDirPath)) {
-		New-Item $icoDirPath -ItemType Directory
+		$null = New-Item $icoDirPath -ItemType Directory
 		Write-Information "Created icons folder in Supermodel directory"
 	}
 
@@ -612,8 +612,8 @@ function New-SteamShortcuts {
     Invoke-WebRequest -Method Get -Uri $SPIKEOFE_ICO_URI -OutFile $spikeofeIcoPath
 
     # Add the new SpikeOut shortcuts to the shortcuts map
-    Add-NonSteamGameShortcut -Map $shortcutMap -AppName 'SpikeOut: Digital Battle Online' -ExeLocation $supermodelExePath -StartDir $SupermodelPath -LaunchOptions $spikeoutLaunchOptions -IconLocation $spikeoutIcoPath -AllowOverlay:$true -AllowDesktopConfig:$true
-    Add-NonSteamGameShortcut -Map $shortcutMap -AppName 'SpikeOut: Final Edition' -ExeLocation $supermodelExePath -StartDir $SupermodelPath -LaunchOptions $spikeofeLaunchOptions -IconLocation $spikeofeIcoPath -AllowOverlay:$true -AllowDesktopConfig:$true
+    $null = Add-NonSteamGameShortcut -Map $shortcutMap -AppName 'SpikeOut: Digital Battle Online' -ExeLocation $supermodelExePath -StartDir $SupermodelPath -LaunchOptions $spikeoutLaunchOptions -IconLocation $spikeoutIcoPath -AllowOverlay:$true -AllowDesktopConfig:$true
+    $null = Add-NonSteamGameShortcut -Map $shortcutMap -AppName 'SpikeOut: Final Edition' -ExeLocation $supermodelExePath -StartDir $SupermodelPath -LaunchOptions $spikeofeLaunchOptions -IconLocation $spikeofeIcoPath -AllowOverlay:$true -AllowDesktopConfig:$true
 
 
     # Export changes to shortcuts.vdf
