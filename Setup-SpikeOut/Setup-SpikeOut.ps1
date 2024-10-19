@@ -3,23 +3,37 @@
         Downloads the latest Supermodel emulator build for Windows, and sets it up to be able to play both versions of SpikeOut.
     .DESCRIPTION
         
+    .LINK
+        https://developer.valvesoftware.com/wiki/VDF
+    .LINK 
+        https://developer.valvesoftware.com/wiki/Binary_VDF
 #>
 
 #region Global Variables
+
 $InformationPreference = 'Continue'
+$ErrorActionPreference = 'Stop'
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-# Add-Type -AssemblyName System.Windows.Forms
+$BASE_SUPERMODEL_URI                = 'https://supermodel3.com/'
+$SUPERMODEL_STEAM_CONFIG_URI        = 'https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/feature/init/Setup-SpikeOut/resources/steamconfig/Supermodel.ini'
+$SUPERMODEL_NONSTEAM_CONFIG_URI     = 'https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/feature/init/Setup-SpikeOut/resources/nonsteamconfig/Supermodel.ini'
+$SPIKEOUT_STEAM_INPUT_CONFIG_URI    = 'https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/feature/init/Setup-SpikeOut/resources/supermodel%20-%20spikeout%20gamepad%20(powershell%20setup)_0.vdf'
+$SPIKEOUT_ICO_URI                   = 'https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/feature/init/Setup-SpikeOut/resources/spikeout.ico'
+$SPIKEOFE_ICO_URI                   = 'https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/feature/init/Setup-SpikeOut/resources/spikeofe.ico'
 
-$BASE_SUPERMODEL_URI = 'https://supermodel3.com/'
-$SUPERMODEL_CONFIG_URI = ''
+$script:TYPE_MAP       = [byte] 0
+$script:TYPE_STRING    = [byte] 1
+$script:TYPE_INT       = [byte] 2
+$script:TYPE_FLOAT     = [byte] 3
+$script:TYPE_LONG      = [byte] 7
+$script:TYPE_MAPEND    = [byte] 8
 
-# 'https://drive.google.com/file/d/1lzkgH6_7wvkPzwmgJdmuj3y4vNh1cZ9k/view?usp=sharing'
-# 'https://drive.google.com/file/d/1ex8whPwJeOemeVYCKa5UwiZm9DEHT2lh/view?usp=sharing'
 #endregion
 
 #region Utility functions
+
 function Read-BinaryChoice {
     param(
         [Parameter(Mandatory)] [string] $Prompt,
@@ -73,6 +87,7 @@ function Read-Choice {
 #region Binary VDF functions
 
 #region Binary VDF Read fynctions
+
 class BufferReader {
     [byte[]] $Buffer
     [int] $Offset
@@ -83,7 +98,7 @@ class BufferReader {
     }
 
     [string] ReadNextString( [System.Text.Encoding] $Encoding) {
-        $nullTerminator = [System.Array]::IndexOf($this.Buffer, $global:TYPE_MAP, $this.Offset)
+        $nullTerminator = [System.Array]::IndexOf($this.Buffer, $script:TYPE_MAP, $this.Offset)
 
         if ($nullTerminator -eq -1) {
             throw [System.IndexOutOfRangeException] "Could not find null terminating byte for string"
@@ -106,7 +121,7 @@ class BufferReader {
         return $val
     }
 
-    [uint] ReadNextUInt32LE() {
+    [uint32] ReadNextUInt32LE() {
         if (($this.Offset + 4) -gt $this.Buffer.Length) {
             throw [System.IndexOutOfRangeException] "Out of Original Buffer's Boundary"
         }
@@ -119,7 +134,7 @@ class BufferReader {
             [Array]::Reverse($intBytes)
         }
 
-        $val = [System.BitConverter]::ToUInt32($intBytes)
+        $val = [System.BitConverter]::ToUInt32($intBytes, 0)
 
         $this.Offset = $this.Offset + 4
         return $val
@@ -138,7 +153,7 @@ class BufferReader {
             [Array]::Reverse($intBytes)
         }
 
-        $val = [System.BitConverter]::ToSingle($intBytes)
+        $val = [System.BitConverter]::ToSingle($intBytes, 0)
 
         $this.Offset = $this.Offset + 4
         return $val
@@ -157,7 +172,7 @@ class BufferReader {
             [Array]::Reverse($intBytes)
         }
 
-        $val = [System.BitConverter]::ToUInt64($intBytes)
+        $val = [System.BitConverter]::ToUInt64($intBytes, 0)
 
         $this.Offset = $this.Offset + 8
         return $val
@@ -168,7 +183,7 @@ function Get-NextMapItem {
     param([BufferReader] $Buffer)
 
     $typeByte = $Buffer.ReadNextByte()
-    if ($typeByte -eq $global:TYPE_MAPEND) {
+    if ($typeByte -eq $script:TYPE_MAPEND) {
         return @{
             Type = $typeByte
         }
@@ -178,19 +193,19 @@ function Get-NextMapItem {
     $value;
 
     switch ($typeByte) {
-        $global:TYPE_MAP {
+        $script:TYPE_MAP {
             $value = Get-NextMap -Buffer $Buffer; break
         }
-        $global:TYPE_STRING {
+        $script:TYPE_STRING {
             $value = $buffer.ReadNextString([System.Text.Encoding]::UTF8); break;
         }
-        $global:TYPE_INT {
+        $script:TYPE_INT {
             $value = $Buffer.ReadNextUInt32LE(); break;
         }
-        $global:TYPE_FLOAT {
+        $script:TYPE_FLOAT {
             $value = $Buffer.ReadNextFloatLE(); break;
         }
-        $global:TYPE_LONG {
+        $script:TYPE_LONG {
             $value = $Buffer.ReadNextUInt64LE(); break;
         }
         default {
@@ -214,7 +229,7 @@ function Get-NextMap {
 
     while ($true) {
         $mapItem = Get-NextMapItem -Buffer $Buffer
-        if ($mapItem.Type -eq $global:TYPE_MAPEND) {
+        if ($mapItem.Type -eq $script:TYPE_MAPEND) {
             break
         }
 
@@ -246,12 +261,12 @@ function Add-String {
     )
 
     $valArr = $Encoding.GetBytes($Value)
-    if ([System.Array]::IndexOf($valArr, $global:TYPE_MAP) -ne -1) {
+    if ([System.Array]::IndexOf($valArr, $script:TYPE_MAP) -ne -1) {
         throw [System.InvalidOperationException] "Strings in VDF files cannot have null chars!"
     }
 
     $Contents.AddRange($valArr)
-    $Contents.Add($global:TYPE_MAP)
+    $Contents.Add($script:TYPE_MAP)
 }
 
 function Add-Number {
@@ -279,31 +294,31 @@ function Add-Map {
 
         switch ($value.GetType().Name) {
             'UInt32' {
-                $Contents.Add($global:TYPE_INT)
+                $Contents.Add($script:TYPE_INT)
                 Add-String -Value $key -Contents $Contents -Encoding ([System.Text.Encoding]::GetEncoding('ISO-8859-1'))
                 Add-Number -Value $value -Contents $Contents
                 break
             }
             'UInt64' {
-                $Contents.Add($global:TYPE_LONG)
+                $Contents.Add($script:TYPE_LONG)
                 Add-String -Value $key -Contents $Contents -Encoding ([System.Text.Encoding]::GetEncoding('ISO-8859-1'))
                 Add-Number -Value $value -Contents $Contents
                 break
             }
             'Single' {
-                $Contents.Add($global:TYPE_FLOAT)
+                $Contents.Add($script:TYPE_FLOAT)
                 Add-String -Value $key -Contents $Contents -Encoding ([System.Text.Encoding]::GetEncoding('ISO-8859-1'))
                 Add-Number -Value $value -Contents $Contents
                 break
             }
             'String' {
-                $Contents.Add($global:TYPE_STRING)
+                $Contents.Add($script:TYPE_STRING)
                 Add-String -Value $key -Contents $Contents -Encoding ([System.Text.Encoding]::GetEncoding('ISO-8859-1'))
                 Add-String -Value $value -Contents $Contents -Encoding ([System.Text.Encoding]::UTF8)
                 break
             }
             'SortedList`2' {
-                $Contents.Add($global:TYPE_MAP)
+                $Contents.Add($script:TYPE_MAP)
                 Add-String -Value $key -Contents $Contents -Encoding ([System.Text.Encoding]::GetEncoding('ISO-8859-1'))
                 Add-Map -Map $value -Contents $Contents
                 break
@@ -314,7 +329,7 @@ function Add-Map {
         }
     }
 
-    $Contents.Add($global:TYPE_MAPEND)
+    $Contents.Add($script:TYPE_MAPEND)
 }
 
 function ConvertTo-BinaryVDF {
@@ -364,7 +379,7 @@ function Add-NonSteamGameShortcut {
     )
 
     # 
-    [uint] $appId = Get-Random -Minimum 1000000000 -Maximum ([uint]::MaxValue - 1)
+    [uint32] $appId = Get-Random -Minimum 1000000000 -Maximum ([uint32]::MaxValue - 1)
 
     if ($Map['shortcuts'].Keys.Count -eq 0) {
         # The first key in shortcuts is always '0'
@@ -375,17 +390,17 @@ function Add-NonSteamGameShortcut {
         $newKey = [string](([int]($Map['shortcuts'].Keys[-1])) + 1)
 
         # Check if generated App ID does not conflict with App IDs of existing non-Steam games in shortcuts.vdf
-        $existingAppIds = [System.Collections.Generic.List[uint]]::new()
+        $existingAppIds = [System.Collections.Generic.List[uint32]]::new()
         foreach ($shortcut in $Map['shortcuts'].GetEnumerator()) {
             if ($shortcut.Value.ContainsKey('appid')) {
-                $existingAppIds.Add([uint]$shortcut.Value['appid'])
+                $existingAppIds.Add([uint32]$shortcut.Value['appid'])
             }
         }
 
         if ($existingAppIds.Count -gt 0) {
             while ($appId -in $existingAppIds) {
                 # Keep rerolling until we get a non-conflicting App ID
-                [uint] $appId = Get-Random -Minimum 1000000000 -Maximum ([uint]::MaxValue - 1)
+                [uint32] $appId = Get-Random -Minimum 1000000000 -Maximum ([uint32]::MaxValue - 1)
             }
         }
     }
@@ -410,10 +425,10 @@ function Add-NonSteamGameShortcut {
     $newShortcut['StartDir'] = $StartDir
     $newShortcut['icon'] = $IconLocation
     $newShortcut['LaunchOptions'] = $LaunchOptions
-    $newShortcut['IsHidden'] = [uint]$IsHidden 
-    $newShortcut['AllowOverlay'] = [uint]$AllowOverlay 
-    $newShortcut['AllowDesktopConfig'] = [uint]$AllowDesktopConfig
-    $newShortcut['openvr'] = [uint]$OpenVr
+    $newShortcut['IsHidden'] = [uint32]$IsHidden 
+    $newShortcut['AllowOverlay'] = [uint32]$AllowOverlay 
+    $newShortcut['AllowDesktopConfig'] = [uint32]$AllowDesktopConfig
+    $newShortcut['openvr'] = [uint32]$OpenVr
 
     $Map['shortcuts'][$newKey] = $newShortcut
 
@@ -425,6 +440,7 @@ function Add-NonSteamGameShortcut {
 #endregion
 
 #region Main functions
+
 function Get-LatestSupermodelDownload {
     param(
         [string] $TargetPath
@@ -462,17 +478,9 @@ function Get-LatestSupermodelDownload {
     Write-Information "Extracted Supermodel archive. Removing archive file..."
     Remove-Item -Path $outputPath -Force
     Write-Information "Successfully deleted archive at '$outputPath'."
-
-    # TODO: Uncomment me
-    $configPath = Join-Path $TargetPath 'Config' | Join-Path -ChildPath 'Supermodel.ini'
-    Copy-Item -Path '/home/durandal/Scripts/Powershell/GriekseEi-RandomPowerShellScripts/Setup-SpikeOut/resources/Supermodel.ini' -Destination $configPath -Force 
-    # Write-Information "Replacing Supermodel config file with adjusted config file from '$SUPERMODEL_CONFIG_URI' and downloading it to '$configPath'..."
-    # Invoke-WebRequest -Method Get -Uri $SUPERMODEL_CONFIG_URI -OutFile $configPath
-    Write-Information "Successfully updated Supermodel config file!"
-
 }
 
-function Build-SpikeOutLaunchOptions {
+function New-SpikeOutLaunchOptions {
 
     while ($true) {
         # Add the -throttle option for preventing the emulator from running too fast on displays higher than 60Hz
@@ -503,12 +511,12 @@ function Build-SpikeOutLaunchOptions {
             }
         }
 
-        $useSSAA = Read-Choice -Prompt "Use SSAA (supersampling anti-aliasing)? This will reduce jagged edges but is more taxing on your hardware. Enter a value from 1 to 8 to set SSAA strength, or enter nothing or 0 to disable SSAA" -Answers @(0..8) -DefaultAnswer '0'
+        $useSSAA = Read-Choice -Prompt "Use SSAA (supersampling anti-aliasing)? This will reduce jagged edges but is more taxing on your hardware.`nEnter a value from 1 to 8 to set SSAA strength, or enter nothing or 0 to disable SSAA" -Answers @(0..8) -DefaultAnswer '0'
         if ($useSSAA -ne '0') {
             $launchOptions += "-ss $useSSAA"
         } 
 
-        $useWidescreen = Read-BinaryChoice -Prompt "Do you want to enable widescreen hacks for SpikeOut? This lets you see more around you, but will cause unimportant graphical glitches during loading screens and stage transitions. [Y/n]" -YesDefault:$true
+        $useWidescreen = Read-BinaryChoice -Prompt "Do you want to enable widescreen hacks for SpikeOut?`n(This lets you see more around you, but can cause unimportant graphical glitches during loading screens and stage transitions) [Y/n]" -YesDefault:$true
         if ($useWidescreen) {
             $launchOptions += '-wide-bg', '-wide-screen'
         }
@@ -541,97 +549,35 @@ Continue with these options? [Y/n]
     return $launchOptions -join ' '
 }
 
-
-function Enable-SteamInputForSpikeOut {
-    param(
-        [uint] $SpikeoutId,
-        [uint] $SpikeofeId
-    )
-
-    # TODO: Un-hardcode this
-    $localconfigPath = "/home/durandal/.steam/steam/userdata/70715094/config/localconfig.vdf"
-
-    # Create backup of localconfig just in case
-    Write-Information "Creating backup of localconfig.vdf..."
-    $backupName = "localconfig_backup_$(Get-Date -Format "MMddyyyy-HHmmss").vdf"
-    $backupPath = Join-Path (Split-Path -Path $localconfigPath -Parent) $backupName
-    Copy-Item -Path $localconfigPath -Destination $backupPath -Force
-    Write-Information "Successfully made a backup at $backupPath"
-
-    $importedVdf = Get-Content -Path $localconfigPath -Raw
-
-    $entrypoint = 
-@"
-	}
-	"apps"
-	{
-"@
-
-    if (([regex]::Matches($importedVdf, $entrypoint).Count -ne 1)) {
-        Write-Warning @"
-Could not find a proper entrypoint in your localconfig.vdf to automatically enable Steam Input and the custom controller configs for the new SpikeOut shortcuts. 
-The SpikeOut shortcuts should be working fine now, but you will have to manually enable Steam Input for the new shortcuts to have the SpikeOut controller config take effect. To do so:
-
-1. Restart your Steam client (the new SpikeOut shortcuts won't show up until you do)
-2. On either of the new SpikeOut shortcuts in your Steam Library, click the Properties button in the pop-up menu.
-3. Go to the Controller tab, then change the "Override for SpikeOut: Final Edition / Digital Battle Online" option from "Use default settings" to "Enable Steam Input"
-
-After that, the custom provided SpikeOut controller config should be automatically applied when you start the game!
-
-NOTE: You are going to have to find the SpikeOut ROMs (spikeout.zip and spikeofe.zip) yourself and place them in the ROMs directory of whereever you installed Supermodel to be able to play the games.
-"@
-        exit 0
-    }
-
-    # For some reason, the app ID keys for the controller config sections of non-steam games is stored as (appId - uint max value - 1), meaning it's always a negative number 
-    $adjustedSpikeoutId = $SpikeoutId - [uint]::MaxValue - 1
-    $adjustedSpikeofeId = $SpikeofeId - [uint]::MaxValue - 1
-
-    # SUUUUUUUUUUUUUUPER hacky way of doing this, but screw it
-$endResult = 
-@"
-	}
-	"apps"
-	{
-		"$adjustedSpikeoutId"
-		{
-			"UseSteamControllerConfig"		"2"
-			"SteamControllerRumble"		"-1"
-			"SteamControllerRumbleIntensity"		"320"
-		}
-		"$adjustedSpikeofeId"
-		{
-			"UseSteamControllerConfig		"2"
-			"SteamControllerRumble"		"-1"
-			"SteamControllerRumbleIntensity"		"320"
-		}
-"@
-
-    $importedVdf = $importedVdf.Replace($entrypoint, $endResult)
-
-    [System.IO.File]::WriteAllText($localconfigPath, $importedVdf)
-    Write-Information "Custom Steam controller configs for SpikeOut should now be enabled!"
-}
-
 function New-SteamShortcuts {
     param(
         [string] $SupermodelPath
     )
 
-    $shortcutsPath = '/home/durandal/.steam/steam/userdata/70715094/config/shortcuts.vdf'
-    # while ($true) {
-    #     $shortcutsPath = Read-Host "Enter the full filepath for where the shortcuts.vdf file is located. This is usually located at C:/Program Files (x86)/Steam/userdata/<your-user-id>/config/shortcuts.vdf"
+    # Download the Supermodel config tuned for use with Steam Input. This one has joystick binds removed from the native Supermodel config, so that it won't interfere with the Steam Input config.
+    $configPath = [IO.Path]::Combine($SupermodelPath, 'Config', 'Supermodel.ini')
+    Invoke-WebRequest -Method Get -Uri $SUPERMODEL_STEAM_CONFIG_URI -OutFile $configPath
+    Write-Information "Replaced Supermodel config file with keybind setup for use with Steam Input. Make sure you don't change the binds without also changing them in the Steam Controller Configs for SpikeOut too, otherwise it might break."
 
-    #     if (-not(Test-Path $shortcutsPath)) {
-    #         Write-Information "Given file path for shortcuts.vdf was not valid. Please try again"
-    #     }
-    #     elseif (-not($shortcutsPath.EndsWith('.vdf'))) {
-    #         Write-Information "Given file path did not select a .vdf file. Please try again"
-    #     }
-    #     else {
-    #         break
-    #     }
-    # }
+    # Read Steam path and current user ID from registry
+    $steamPath = Get-ItemPropertyValue "HKCU:\SOFTWARE\Valve\Steam" -Name SteamPath
+    $steamUserId = Get-ItemPropertyValue "HKCU:\SOFTWARE\Valve\Steam\ActiveProcess" -Name ActiveUser
+
+    $shortcutsPath = [IO.Path]::Combine($steamPath, "userdata", $steamUserId, "config", "shortcuts.vdf")
+    $controllerConfigPath = [IO.Path]::Combine($steamPath, "steamapps", "common", "Steam Controller Configs", $steamUserId, "config")
+
+    if (-not (Test-Path (Split-Path $shortcutsPath -Parent))) {
+        Write-Warning "Path to shortcuts.vdf ($shortcutsPath) wasn't valid. Make sure Steam is active and running before running this script"
+        exit 1
+    }
+
+    if (-not (Test-Path $shortcutsPath)) {
+        Write-Information "shortcuts.vdf not yet made in Steam userdata config. Creating a new default shortcuts file..."
+
+        # As we're dealing with a binary file, we have to initialize a default file with a byte array
+        $emptyShortcutsVdf = [byte[]] @(0, 115, 104, 111, 114, 116, 99, 117, 116, 115, 0, 8, 8)
+        $null = New-Item -Path $shortcutsPath -Value $emptyShortcutsVdf -ItemType File
+    }
 
     # Create backup of shortcuts.vdf just in case
     $shortcutsBackupName = "shortcuts_backup_$(Get-Date -Format "MMddyyyy-HHmmss").vdf"
@@ -643,39 +589,40 @@ function New-SteamShortcuts {
     $shortcutMap = ConvertFrom-BinaryVDF -Buffer ([System.IO.File]::ReadAllBytes($shortcutsPath))
     Write-Information "Successfully imported shortcuts.vdf. Adding shortcuts..."
 
-    # Construct the shortcut / launch options
+    # Construct the shortcut options
     $romPath = Join-Path $SupermodelPath "ROMs"
     $supermodelExePath = Join-Path $SupermodelPath "Supermodel.exe"
-    $launchOptions = Build-SpikeOutLaunchOptions
+    $launchOptions = New-SpikeOutLaunchOptions
 
+    # The path to the ROM has to be encased in quotes in case the path contains whitespace
     $spikeoutLaunchOptions = "`"$(Join-Path $romPath 'spikeout.zip')`"" + " " + $launchOptions
     $spikeofeLaunchOptions = "`"$(Join-Path $romPath 'spikeofe.zip')`"" + " " + $launchOptions
 
-	# Download icons
+	# Download icons to a new icons folder in the Supermodel directory
 	$icoDirPath = Join-Path $SupermodelPath "Icons"
 	if (-not(Test-Path $icoDirPath)) {
 		New-Item $icoDirPath -ItemType Directory
 		Write-Information "Created icons folder in Supermodel directory"
 	}
 
-	# TODO: Replace this with actual download logic to new icons folder
-	$spikeoutIcoPath = "/home/durandal/Scripts/Powershell/GriekseEi-RandomPowerShellScripts/Setup-SpikeOut/resources/spikeout.ico"
-	$spikeofeIcoPath = "/home/durandal/Scripts/Powershell/GriekseEi-RandomPowerShellScripts/Setup-SpikeOut/resources/spikeofe.ico"
+	$spikeoutIcoPath = Join-Path $icoDirPath 'spikeout.ico'
+	$spikeofeIcoPath = Join-Path $icoDirPath 'spikeofe.ico'
+    Invoke-WebRequest -Method Get -Uri $SPIKEOUT_ICO_URI -OutFile $spikeoutIcoPath
+    Invoke-WebRequest -Method Get -Uri $SPIKEOFE_ICO_URI -OutFile $spikeofeIcoPath
 
     # Add the new SpikeOut shortcuts to the shortcuts map
-    $spikeoutAppId = Add-NonSteamGameShortcut -Map $shortcutMap -AppName 'SpikeOut: Digital Battle Online' -ExeLocation $supermodelExePath -StartDir $SupermodelPath -LaunchOptions $spikeoutLaunchOptions -IconLocation $spikeoutIcoPath -AllowOverlay:$true -AllowDesktopConfig:$true
-    $spikeofeAppId = Add-NonSteamGameShortcut -Map $shortcutMap -AppName 'SpikeOut: Final Edition' -ExeLocation $supermodelExePath -StartDir $SupermodelPath -LaunchOptions $spikeofeLaunchOptions -IconLocation $spikeofeIcoPath -AllowOverlay:$true -AllowDesktopConfig:$true
+    Add-NonSteamGameShortcut -Map $shortcutMap -AppName 'SpikeOut: Digital Battle Online' -ExeLocation $supermodelExePath -StartDir $SupermodelPath -LaunchOptions $spikeoutLaunchOptions -IconLocation $spikeoutIcoPath -AllowOverlay:$true -AllowDesktopConfig:$true
+    Add-NonSteamGameShortcut -Map $shortcutMap -AppName 'SpikeOut: Final Edition' -ExeLocation $supermodelExePath -StartDir $SupermodelPath -LaunchOptions $spikeofeLaunchOptions -IconLocation $spikeofeIcoPath -AllowOverlay:$true -AllowDesktopConfig:$true
 
-    # TODO: remove this shit
-    Write-Information $spikeoutAppId
-    Write-Information $spikeofeAppId
 
     # Export changes to shortcuts.vdf
     [System.IO.File]::WriteAllBytes($shortcutsPath, (ConvertTo-BinaryVDF $shortcutMap))
     Write-Information "Successfully added non-Steam game shortcuts for SpikeOut: Digital Battle Online and SpikeOut: Final Edition to your Steam Library."
 
-    # TODO: Don't hardcode this
-    $controllerConfigPath = '/home/durandal/.steam/steam/steamapps/common/Steam Controller Configs/70715094/config/'
+    # Download the Steam Input config for SpikeOut and place them in the necessary folders
+    $configDownloadDest = Join-Path $env:TEMP 'supermodel - spikeout gamepad (powershell setup)_0.vdf'
+    Invoke-WebRequest -Method Get -Uri $SPIKEOUT_STEAM_INPUT_CONFIG_URI -OutFile $configDownloadDest
+
     $spikeoutControllerConfigPath = Join-Path $controllerConfigPath 'spikeout digital battle online'
     $spikeofeControllerConfigPath = Join-Path $controllerConfigPath 'spikeout final edition'
 
@@ -690,56 +637,77 @@ function New-SteamShortcuts {
         Write-Information "Added controller config folder for SpikeOut: Final Edition..."
     }
 
-    # Copy the Steam controller configs to the game-specific controller config folders
-    # TODO: These files should be downloaded from a git repo
-	$controllerVdf = '/home/durandal/Scripts/Powershell/GriekseEi-RandomPowerShellScripts/Setup-SpikeOut/resources/supermodel - spikeout gamepad (powershell setup)_0.vdf'
-
-    Copy-Item -Path $controllerVdf -Destination $spikeoutControllerConfigPath -Force
-    Copy-Item -Path $controllerVdf -Destination $spikeofeControllerConfigPath -Force
+    Copy-Item -Path $configDownloadDest -Destination $spikeoutControllerConfigPath -Force
+    Copy-Item -Path $configDownloadDest -Destination $spikeofeControllerConfigPath -Force
 
     Write-Information "Successfully copied SpikeOut controller configs to the controller config folder!"
-
-    # Enable-SteamInputForSpikeOut -SpikeoutId $spikeoutAppId -SpikeofeId $spikeofeAppId
 }
 #endregion
 
 function Main {
     try {
-        Write-Information "Starting Supermodel (Windows) + SpikeOut installer by testament_enjoyment..."
+        Write-Information "Starting Supermodel (Windows) + SpikeOut: Digital Battle Online / Final Edition installer by testament_enjoyment..."
 
-        if (-not($PSVersionTable.Platform -match 'Windows')) {
-            $res = Read-BinaryChoice -Prompt "This script will download the Windows version of Supermodel and therefore might not work on your platform. Continue regardless? [y/N]" -YesDefault:$false
-            if (-not $res) {
-                exit 0
-            }
+        # Abort script if ran on non-Windows system
+        if (-not($Env:OS -match 'Windows')) {
+            Write-Warning "This script is designed to only work on Windows."
+            exit 1
         }
+
+        # Build open file dialog to pick the Supermodel emulator folder
+        Add-Type -AssemblyName System.Windows.Forms 
+
+        $dirSelect = New-Object System.Windows.Forms.FolderBrowserDialog
+        $dirSelect.RootFolder = 'UserProfile'
+        $dirSelect.Description = "Choose in which folder to install the Sega Model 3 - Supermodel emulator..."
+        $dirSelect.ShowNewFolderButton = $true
     
         do {
-            $targetPath = Read-Host "Enter the full filepath for where you want to download the Supermodel emulator (Press ENTER or leave empty to use the current directory)"
-        
-            if ([string]::IsNullOrEmpty($targetPath)) {
-                $targetPath = $PSScriptRoot
-            }
-            else {
-                $targetPath = Resolve-Path $targetPath
+            $result = $dirSelect.ShowDialog()
+            if ($result -ne [System.Windows.Forms.DialogResult]::OK) {
+                Write-Warning "Canceled folder selection. Aborting script..."
+                exit 1
             }
         
-            $validPath = Test-Path $targetPath
+            $validPath = Test-Path $dirSelect.SelectedPath
             if (-not $validPath) {
                 Write-Warning "Given path '$targetPath' was not valid or could not be found. Please retry."
             }
         
         } while (-not $validPath)
 
+        $selectedPath = $dirSelect.SelectedPath
         
-        $cont = Read-BinaryChoice -Prompt "Download the Supermodel emulator to '$targetPath'? [Y/n]" -YesDefault:$true
+        # Prompt user to download Supermodel emulator
+        $cont = Read-BinaryChoice -Prompt "Download the SEGA Model 3 Supermodel emulator to '$selectedPath'?`n(RECOMMENDED, this is required to be able to play SpikeOut at all. Enter N(o) only if you already have Supermodel downloaded) [Y/n]" -YesDefault:$true
         if ($cont) {
-            Get-LatestSupermodelDownload -TargetPath $targetPath
+            Get-LatestSupermodelDownload -TargetPath $selectedPath
+        }
+        else {
+            if (-not(Test-Path -Path (Join-Path $selectedPath "Supermodel.exe"))) {
+                Write-Warning "Rejected download, but could not find existing Supermodel installation at location '$selectedPath'. Aborting script..."
+                exit 1
+            }
         }
 
-        $cont = Read-BinaryChoice -Prompt "Add shortcuts for SpikeOut: Digital Battle Online and Final Edition to your Steam library? (Recommended, as this will also set up all the input bindings for SpikeOut using Steam Input to work out-of-the-box. Note that Steam does have to already be installed and setup on your system) [Y/n]" -YesDefault:$true
+        # Check if Steam is installed on this system
+        $isSteamInstalled = $null -ne (Get-ItemPropertyValue "HKCU:\SOFTWARE\Valve\Steam" -Name SteamPath -ErrorAction SilentlyContinue)
+        if (-not $isSteamInstalled) {
+            Write-Information "Could not find Steam installation on current system..."
+        }
+
+        $cont = Read-BinaryChoice -Prompt "Add shortcuts for SpikeOut: Digital Battle Online and Final Edition to your Steam library?`n(Recommended, as this will also set up all the input bindings for SpikeOut using Steam Input to work out-of-the-box. However, this requires Steam to be installed and actively running on your system.) [Y/n]" -YesDefault:$true
         if ($cont) {
-            New-SteamShortcuts -SupermodelPath $targetPath
+            do {
+                # Steam must be running so that we can read the ID of the current active Steam user in the registry
+                $isSteamRunning = -not((Get-ItemPropertyValue "HKCU:\SOFTWARE\Valve\Steam\ActiveProcess" -Name ActiveUser -ErrorAction SilentlyContinue) -in @(0, $null))
+
+                if (-not $isSteamRunning) {
+                    $null = Read-Host -Prompt "Could not detect that an instance of Steam was running on this system. Please launch Steam then press ENTER on this screen to try again"
+                }
+            } while (-not $isSteamRunning)
+
+            New-SteamShortcuts -SupermodelPath $selectedPath
         }
         
         Write-Warning @"
@@ -751,7 +719,7 @@ The SpikeOut shortcuts should be working fine now, but you will have to manually
 
 After that, the custom provided SpikeOut controller config should be automatically applied when you start the game!
 
-NOTE: You are going to have to find the SpikeOut ROMs (spikeout.zip and spikeofe.zip) yourself and place them in the ROMs directory of whereever you installed Supermodel ($(Join-Path $targetPath "ROMs")) to be able to play the games.
+NOTE: You are going to have to find the SpikeOut ROMs (spikeout.zip and spikeofe.zip) yourself and place them in the ROMs directory of whereever you installed Supermodel ($(Join-Path $selectedPath "ROMs")) to be able to play the games.
 "@
     }
     catch {
@@ -770,5 +738,3 @@ NOTE: You are going to have to find the SpikeOut ROMs (spikeout.zip and spikeofe
 }
 
 Main
-
-
