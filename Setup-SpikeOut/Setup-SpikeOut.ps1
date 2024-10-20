@@ -600,6 +600,7 @@ Continue with these options? [Y/n]
 
 function New-WindowsShortcut {
     param(
+        [string] $WorkingDirectory,
         [string] $ExeLocation,
         [string] $IcoLocation,
         [string] $ShortcutLocation,
@@ -611,6 +612,7 @@ function New-WindowsShortcut {
     $shortcut.TargetPath = $ExeLocation
     $shortcut.IconLocation = $IcoLocation
     $shortcut.Arguments = $LaunchOptions
+    $shortcut.WorkingDirectory = $WorkingDirectory
     $shortcut.Save()
 
     Copy-Item -Path $ShortcutLocation -Destination ([IO.Path]::Combine($HOME, "Desktop", (Split-Path $ShortcutLocation -Leaf))) -Force
@@ -664,8 +666,8 @@ function New-RegularShortcuts {
     $spikeoutIcoPath = Get-Icon -IconsPath $icoDirPath -IconName "spikeout.ico" -IconUri $SPIKEOUT_ICO_URI
     $spikeofeIcoPath = Get-Icon -IconsPath $icoDirPath -IconName "spikeofe.ico" -IconUri $SPIKEOFE_ICO_URI
 
-    New-WindowsShortcut -ExeLocation $supermodelExePath -IcoLocation $spikeoutIcoPath -LaunchOptions $spikeoutLaunchOptions -ShortcutLocation (Join-Path $SupermodelPath "SpikeOut Digital Battle Online.lnk")
-    New-WindowsShortcut -ExeLocation $supermodelExePath -IcoLocation $spikeofeIcoPath -LaunchOptions $spikeofeLaunchOptions -ShortcutLocation (Join-Path $SupermodelPath "SpikeOut Final Edition.lnk")
+    New-WindowsShortcut -WorkingDirectory $SupermodelPath -ExeLocation $supermodelExePath -IcoLocation $spikeoutIcoPath -LaunchOptions $spikeoutLaunchOptions -ShortcutLocation (Join-Path $SupermodelPath "SpikeOut Digital Battle Online.lnk")
+    New-WindowsShortcut -WorkingDirectory $SupermodelPath -ExeLocation $supermodelExePath -IcoLocation $spikeofeIcoPath -LaunchOptions $spikeofeLaunchOptions -ShortcutLocation (Join-Path $SupermodelPath "SpikeOut Final Edition.lnk")
 
     Write-Information "Operation successful! Remember that you can always change the Supermodel options by editing the launch options in the SpikeOut shortcut properties."
 }
