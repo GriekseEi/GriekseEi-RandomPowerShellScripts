@@ -1,8 +1,25 @@
 <#
     .SYNOPSIS
-        Downloads the latest Supermodel emulator build for Windows, and sets it up to be able to play both versions of SpikeOut.
+        Windows Supermodel emulator + SpikeOut install wizard script
     .DESCRIPTION
+        Sets up the Supermodel emulator and shortcuts to easily pick up and play both versions of SpikeOut. The user is given the choice of
+        what launch options to pick (window mode, widescreen enabled, etc.). 
         
+        In addition the user can choose to integrate SpikeOut as a shortcut in their Steam Library, which also allows us to supply a 
+        custom Steam Input controller config that allows for more macros and button shortcuts than what the native Supermodel input 
+        scheme would allow. If Steam isn't installed on the host system, then standard desktop shortcuts for SpikeOut will be made.
+    .NOTES
+        - Designed to work with the default PowerShell installation on most WIndows systems (PS 5.1) for total out-of-the-box compatibility.
+
+        - This script does not supply the SpikeOut ROMs. For legal reasons these have to be found yourself and placed in the ROMs directory of
+        the Supermodel folder. 
+
+        - The Steam Input version of the Supermodel.ini config has all relevant joystick inputs scrubbed to avoid issues related to both 
+        Supermodel and Steam Input firing the same input simultaneously which *may* cause issues.
+
+        Author: testament_enjoyment
+    .LINK
+        https://supermodel3.com/
     .LINK
         https://developer.valvesoftware.com/wiki/VDF
     .LINK 
@@ -11,76 +28,29 @@
 
 #region Global Variables
 
+$oldErrorActionPreference = $ErrorActionPreference
+
 $InformationPreference = 'Continue'
 $ErrorActionPreference = 'Stop'
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
+# URLs for various resources we need to download
 $BASE_SUPERMODEL_URI                = 'https://supermodel3.com/'
 $SUPERMODEL_STEAM_CONFIG_URI        = 'https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/feature/init/Setup-SpikeOut/resources/steamconfig/Supermodel.ini'
 $SUPERMODEL_NONSTEAM_CONFIG_URI     = 'https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/feature/init/Setup-SpikeOut/resources/nonsteamconfig/Supermodel.ini'
 $SPIKEOUT_STEAM_INPUT_CONFIG_URI    = 'https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/feature/init/Setup-SpikeOut/resources/supermodel%20-%20spikeout%20gamepad%20(powershell%20setup)_0.vdf'
 $SPIKEOUT_ICO_URI                   = 'https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/feature/init/Setup-SpikeOut/resources/spikeout.ico'
 $SPIKEOFE_ICO_URI                   = 'https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/feature/init/Setup-SpikeOut/resources/spikeofe.ico'
+$SPIKEOUT_CONTROLS_URI              = 'https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/feature/init/Setup-SpikeOut/resources/spikeout_controls_howto.jpg'
 
+# Values of the type bytes used in binary VDFs to signify the type of the next value. See the Binary VDF documentation
 $global:TYPE_MAP       = [byte] 0
 $global:TYPE_STRING    = [byte] 1
 $global:TYPE_INT       = [byte] 2
 $global:TYPE_FLOAT     = [byte] 3
 $global:TYPE_LONG      = [byte] 7
 $global:TYPE_MAPEND    = [byte] 8
-
-#endregion
-
-#region Utility functions
-
-function Read-BinaryChoice {
-    param(
-        [Parameter(Mandatory)] [string] $Prompt,
-        [Parameter(Mandatory)] [boolean] $YesDefault
-    )
-
-    $yesAnswers = @("yes", "y", "ye", "yeah")
-    $noAnswers = @("no", "n", "nah", "nope", "nop")
-
-    do {
-        $answer = (Read-Host -Prompt $Prompt).ToLower()
-
-        if (($answer -in $yesAnswers) -or ([string]::IsNullOrEmpty($answer) -and $YesDefault)) {
-            return $true
-        }
-
-        if (($answer -in $noAnswers) -or ([string]::IsNullOrEmpty($answer) -and -not($YesDefault))) {
-            return $false
-        }
-
-        Write-Warning "Couldn't parse answer. Try again."
-    }
-    while ($true)
-}
-
-function Read-Choice {
-    param(
-        [Parameter(Mandatory)] [string] $Prompt,
-        [Parameter(Mandatory)] [string[]] $Answers,
-        [Parameter(Mandatory)] $DefaultAnswer
-    )
-
-    do {
-        $answer = (Read-Host -Prompt $Prompt).ToLower()
-
-        if (($answer -in $Answers)) {
-            return $answer
-        }
-
-        if ([string]::IsNullOrEmpty($answer)) {
-            return $DefaultAnswer
-        }
-
-        Write-Warning "Couldn't parse answer. Try again."
-    }
-    while ($true)
-}
 
 #endregion
 
@@ -240,7 +210,6 @@ function Get-NextMap {
 }
 
 function ConvertFrom-BinaryVDF {
-    [OutputType([hashtable])]
     param(
         [byte[]] $Buffer,
         [int] $Offset = 0
@@ -439,7 +408,80 @@ function Add-NonSteamGameShortcut {
 
 #endregion
 
-#region Main functions
+#region Utility functions
+
+function Read-BinaryChoice {
+    param(
+        [Parameter(Mandatory)] [string] $Prompt,
+        [Parameter(Mandatory)] [boolean] $YesDefault
+    )
+
+    $yesAnswers = @("yes", "y", "ye", "yeah")
+    $noAnswers = @("no", "n", "nah", "nope", "nop")
+
+    do {
+        $answer = (Read-Host -Prompt $Prompt).ToLower()
+
+        if (($answer -in $yesAnswers) -or ([string]::IsNullOrEmpty($answer) -and $YesDefault)) {
+            return $true
+        }
+
+        if (($answer -in $noAnswers) -or ([string]::IsNullOrEmpty($answer) -and -not($YesDefault))) {
+            return $false
+        }
+
+        Write-Warning "Couldn't parse answer. Try again."
+    }
+    while ($true)
+}
+
+function Read-Choice {
+    param(
+        [Parameter(Mandatory)] [string] $Prompt,
+        [Parameter(Mandatory)] [string[]] $Answers,
+        [Parameter(Mandatory)] $DefaultAnswer
+    )
+
+    do {
+        $answer = (Read-Host -Prompt $Prompt).ToLower()
+
+        if (($answer -in $Answers)) {
+            return $answer
+        }
+
+        if ([string]::IsNullOrEmpty($answer)) {
+            return $DefaultAnswer
+        }
+
+        Write-Warning "Couldn't parse answer. Try again."
+    }
+    while ($true)
+}
+
+function Get-TargetFolder {
+    Add-Type -AssemblyName System.Windows.Forms 
+
+    $dirSelect = New-Object System.Windows.Forms.FolderBrowserDialog
+    $dirSelect.RootFolder = 'UserProfile'
+    $dirSelect.Description = "Choose in which folder to install the Sega Model 3 - Supermodel emulator..."
+    $dirSelect.ShowNewFolderButton = $true
+
+    do {
+        $result = $dirSelect.ShowDialog()
+        if ($result -ne [System.Windows.Forms.DialogResult]::OK) {
+            Write-Warning "Canceled folder selection. Aborting script..."
+            exit 1
+        }
+    
+        $validPath = Test-Path $dirSelect.SelectedPath
+        if (-not $validPath) {
+            Write-Warning "Given path '$targetPath' was not valid or could not be found. Please retry."
+        }
+    
+    } while (-not $validPath)
+
+    return $dirSelect.SelectedPath
+}
 
 function Get-LatestSupermodelDownload {
     param(
@@ -480,13 +522,32 @@ function Get-LatestSupermodelDownload {
     Write-Information "Successfully deleted archive at '$outputPath'."
 }
 
+function Restart-Steam {
+    $steamProcess = Get-Process -Name 'Steam'
+    $steamPath = $steamProcess.Path
+
+    # Use Steam's own shutdown mechanism for a graceful restart
+    Start-Process $steamPath -ArgumentList '-Shutdown' -Wait
+
+    # We need to wait a bit before being able to restart Steam again
+    Start-Sleep -Seconds 8
+    Start-Process -FilePath $steamPath
+}
+
 function New-SpikeOutLaunchOptions {
 
-    while ($true) {
+    do {
         # Add the -throttle option for preventing the emulator from running too fast on displays higher than 60Hz
         $launchOptions = @('-throttle')
 
-        $windowModeSelection = Read-Choice -Prompt "Which window mode do you want to use for the Supermodel emulator? Enter the number of the corresponding option:`n1) Fullscreen (default)`n2) Windowed`n3) Borderless windowed" -Answers @(1..3)  -DefaultAnswer '1'
+        $windowModeSelection = Read-Choice -Answers @(1..3)  -DefaultAnswer '1' -Prompt @"
+Which window mode do you want to use for the Supermodel emulator?
+1) Fullscreen (default)
+2) Windowed
+3) Borderless windowed
+Enter a number from 1 to 3 to select your option
+"@
+
         switch ($windowModeSelection) {
             '1' { $windowMode = '-fullscreen'; break }
             '2' { $windowMode = '-window'; break }
@@ -495,7 +556,7 @@ function New-SpikeOutLaunchOptions {
         $launchOptions += $windowMode
 
         while ($true) {
-            $resolution = Read-Host "Enter the desired screen resolution for the Supermodel emulator window separated by a comma (for example: 1920,1080 or 2540,1440 or 1280,720 or 640,480). Leave empty to use the resolution of your current screen" 
+            $resolution = Read-Host "`nEnter the desired screen resolution for the Supermodel emulator window separated by a comma (for example: 1920,1080 or 2540,1440 or 1280,720 or 640,480). Leave empty to use the resolution of your current screen" 
             
             if (($resolution -split ',').Count -eq 2) {
                 # Remove whitespace in strings in case someone decides to enter it like '1920, 1080'
@@ -511,26 +572,17 @@ function New-SpikeOutLaunchOptions {
             }
         }
 
-        $useSSAA = Read-Choice -Prompt "Use SSAA (supersampling anti-aliasing)? This will reduce jagged edges but is more taxing on your hardware.`nEnter a value from 1 to 8 to set SSAA strength, or enter nothing or 0 to disable SSAA" -Answers @(0..8) -DefaultAnswer '0'
-        if ($useSSAA -ne '0') {
-            $launchOptions += "-ss $useSSAA"
-        } 
+        $useSSAA = Read-Choice -Prompt "`nUse SSAA (supersampling anti-aliasing)? This will reduce jagged edges but is more taxing on your hardware.`nEnter a value from 1 to 8 to set SSAA strength, or enter nothing or 0 to disable SSAA" -Answers @(0..8) -DefaultAnswer '0'
+        if ($useSSAA -ne '0') { $launchOptions += "-ss $useSSAA" } 
 
-        $useWidescreen = Read-BinaryChoice -Prompt "Do you want to enable widescreen hacks for SpikeOut?`n(This lets you see more around you, but can cause unimportant graphical glitches during loading screens and stage transitions) [Y/n]" -YesDefault:$true
-        if ($useWidescreen) {
-            $launchOptions += '-wide-bg', '-wide-screen'
-        }
+        $useWidescreen = Read-BinaryChoice -Prompt "`nDo you want to enable widescreen hacks for SpikeOut?`n(This lets you see more around you, but can cause unimportant graphical glitches during loading screens and stage transitions) [Y/n]" -YesDefault:$true
+        if ($useWidescreen) { $launchOptions += '-wide-bg', '-wide-screen' }
 
-        if ([string]::IsNullOrEmpty($resolution)) { 
-            $resolutionResult = 'Default' 
-        } 
-        else { 
-            $resolutionResult = $resolution 
-        } 
-
+        if ([string]::IsNullOrEmpty($resolution)) { $resolutionResult = 'Default' } 
+        else { $resolutionResult = $resolution } 
 
         $confirmPrompt = @"
-Selected following options:
+`nSelected following options:
 Window mode: $windowMode
 Resolution: $resolutionResult
 SSAA: $useSSAA
@@ -540,13 +592,82 @@ Continue with these options? [Y/n]
 "@
         $confirmOptions = Read-BinaryChoice -Prompt $confirmPrompt -YesDefault:$true
 
-        if ($confirmOptions) {
-            break
-        }
-    }
+    } while (-not $confirmOptions)
 
     Write-Information "You can always later change these launch options by right-clicking on the Steam shortcuts for SpikeOut and going to Properties... -> Shortcut -> Launch Options."
     return $launchOptions -join ' '
+}
+
+function New-WindowsShortcut {
+    param(
+        [string] $ExeLocation,
+        [string] $IcoLocation,
+        [string] $ShortcutLocation,
+        [string] $LaunchOptions
+    )
+
+    $WScriptShell = New-Object -ComObject WScript.Shell
+    $shortcut = $WScriptShell.CreateShortcut($ShortcutLocation)
+    $shortcut.TargetPath = $ExeLocation
+    $shortcut.IconLocation = $IcoLocation
+    $shortcut.Arguments = $LaunchOptions
+    $shortcut.Save()
+
+    Copy-Item -Path $ShortcutLocation -Destination ([IO.Path]::Combine($HOME, "Desktop", (Split-Path $ShortcutLocation -Leaf))) -Force
+    Write-Information "Created shortcut at $ShortcutLocation and copied it to desktop."
+}
+
+function Get-Icon {
+    param(
+        [string] $IconsPath,
+        [string] $IconName,
+        [string] $IconUri
+    )
+
+	if (-not(Test-Path $IconsPath)) {
+		$null = New-Item $IconsPath -ItemType Directory
+		Write-Information "Created icons folder in Supermodel directory"
+	}
+
+	$fullIcoPath = Join-Path $IconsPath $IconName
+    Invoke-WebRequest -Method Get -Uri $IconUri -OutFile $fullIcoPath
+
+    return $fullIcoPath
+}
+
+#endregion
+
+#region Main functions
+
+function New-RegularShortcuts {
+    param(
+        [string] $SupermodelPath
+    )
+
+    Write-Information "Building Windows shortcuts for SpikeOut: Digital Battle Online and SpikeOut: Final Edition..."
+
+    # Download an optimized standard Supermodel config.
+    $configPath = [IO.Path]::Combine($SupermodelPath, 'Config', 'Supermodel.ini')
+    Invoke-WebRequest -Method Get -Uri $SUPERMODEL_NONSTEAM_CONFIG_URI -OutFile $configPath
+    Write-Information "Replaced Supermodel config file with optimized control setup."
+
+    $romPath = Join-Path $SupermodelPath "ROMs"
+    $supermodelExePath = Join-Path $SupermodelPath "Supermodel.exe"
+    $launchOptions = New-SpikeOutLaunchOptions
+
+    # The path to the ROM has to be encased in quotes in case the path contains whitespace
+    $spikeoutLaunchOptions = "`"$(Join-Path $romPath 'spikeout.zip')`"" + " " + $launchOptions
+    $spikeofeLaunchOptions = "`"$(Join-Path $romPath 'spikeofe.zip')`"" + " " + $launchOptions
+
+	# Download icons to a new icons folder in the Supermodel directory
+	$icoDirPath = Join-Path $SupermodelPath "Icons"
+    $spikeoutIcoPath = Get-Icon -IconsPath $icoDirPath -IconName "spikeout.ico" -IconUri $SPIKEOUT_ICO_URI
+    $spikeofeIcoPath = Get-Icon -IconsPath $icoDirPath -IconName "spikeofe.ico" -IconUri $SPIKEOFE_ICO_URI
+
+    New-WindowsShortcut -ExeLocation $supermodelExePath -IcoLocation $spikeoutIcoPath -LaunchOptions $spikeoutLaunchOptions -ShortcutLocation (Join-Path $SupermodelPath "SpikeOut Digital Battle Online.lnk")
+    New-WindowsShortcut -ExeLocation $supermodelExePath -IcoLocation $spikeofeIcoPath -LaunchOptions $spikeofeLaunchOptions -ShortcutLocation (Join-Path $SupermodelPath "SpikeOut Final Edition.lnk")
+
+    Write-Information "Operation successful! Remember that you can always change the Supermodel options by editing the launch options in the SpikeOut shortcut properties."
 }
 
 function New-SteamShortcuts {
@@ -584,7 +705,7 @@ function New-SteamShortcuts {
     if (-not (Test-Path $shortcutsPath)) {
         Write-Information "shortcuts.vdf not yet made in Steam userdata config. Creating a new default shortcuts file..."
 
-        # As we're dealing with a binary file, we have to initialize a default file with a byte array
+        # As we're dealing with a binary file, we have to initialize a default file with a byte array. This basically translates to a VDF file with one key named 'shortcuts' and an empty object value
         $defaultShortcutsValue = [byte[]] @(0, 115, 104, 111, 114, 116, 99, 117, 116, 115, 0, 8, 8)
         $null = New-Item -Path $shortcutsPath -ItemType File
         [IO.File]::WriteAllBytes($shortcutsPath, $defaultShortcutsValue)
@@ -611,20 +732,12 @@ function New-SteamShortcuts {
 
 	# Download icons to a new icons folder in the Supermodel directory
 	$icoDirPath = Join-Path $SupermodelPath "Icons"
-	if (-not(Test-Path $icoDirPath)) {
-		$null = New-Item $icoDirPath -ItemType Directory
-		Write-Information "Created icons folder in Supermodel directory"
-	}
-
-	$spikeoutIcoPath = Join-Path $icoDirPath 'spikeout.ico'
-	$spikeofeIcoPath = Join-Path $icoDirPath 'spikeofe.ico'
-    Invoke-WebRequest -Method Get -Uri $SPIKEOUT_ICO_URI -OutFile $spikeoutIcoPath
-    Invoke-WebRequest -Method Get -Uri $SPIKEOFE_ICO_URI -OutFile $spikeofeIcoPath
+    $spikeoutIcoPath = Get-Icon -IconsPath $icoDirPath -IconName "spikeout.ico" -IconUri $SPIKEOUT_ICO_URI
+    $spikeofeIcoPath = Get-Icon -IconsPath $icoDirPath -IconName "spikeofe.ico" -IconUri $SPIKEOFE_ICO_URI
 
     # Add the new SpikeOut shortcuts to the shortcuts map
     $null = Add-NonSteamGameShortcut -Map $shortcutMap -AppName 'SpikeOut: Digital Battle Online' -ExeLocation $supermodelExePath -StartDir $SupermodelPath -LaunchOptions $spikeoutLaunchOptions -IconLocation $spikeoutIcoPath -AllowOverlay:$true -AllowDesktopConfig:$true
     $null = Add-NonSteamGameShortcut -Map $shortcutMap -AppName 'SpikeOut: Final Edition' -ExeLocation $supermodelExePath -StartDir $SupermodelPath -LaunchOptions $spikeofeLaunchOptions -IconLocation $spikeofeIcoPath -AllowOverlay:$true -AllowDesktopConfig:$true
-
 
     # Export changes to shortcuts.vdf
     [System.IO.File]::WriteAllBytes($shortcutsPath, (ConvertTo-BinaryVDF $shortcutMap))
@@ -653,23 +766,26 @@ function New-SteamShortcuts {
 
     Write-Information "Successfully copied SpikeOut controller configs to the controller config folder!"
 
+    # Prompt user to restart Steam
     $cont = Read-BinaryChoice -Prompt "Steam must be restarted for the new shortcuts to appear in your library. Restart Steam now? [Y/n]" -YesDefault:$true
     if ($cont) { Restart-Steam }
+
+    # Show user the Steam control setup for SpikeOut
+    Write-Information "Opening an image in your browser on the SpikeOut control scheme..."
+    Start-Process $SPIKEOUT_CONTROLS_URI
+
+    Write-Warning @"
+The SpikeOut shortcuts should be working fine now, but you will have to manually enable Steam Input for the new shortcuts to have the SpikeOut controller config take effect. To do so:
+
+1. On either of the new SpikeOut shortcuts in your Steam Library (these only show up after you restarted Steam), click the Properties button in the pop-up menu.
+2. Go to the Controller tab, then change the "Override for SpikeOut: Final Edition / Digital Battle Online" option from "Use default settings" to "Enable Steam Input"
+
+After that, the custom provided SpikeOut controller config should be automatically applied when you start the game!
+
+NOTE: You are going to have to find the SpikeOut ROMs (spikeout.zip and spikeofe.zip) yourself and place them in the ROMs directory of whereever you installed Supermodel ($romPath) to be able to play the games.
+Make sure you get a NON-MERGED ROM set. MERGED ROM sets will NOT work.
+"@
 }
-
-function Restart-Steam {
-    $steamProcess = Get-Process -Name 'Steam'
-    $steamPath = $steamProcess.Path
-
-    # Use Steam's own shutdown mechanism for a graceful restart
-    Start-Process $steamPath -ArgumentList '-Shutdown' -Wait
-
-    # We need to wait a bit before being able to restart Steam again
-    Start-Sleep -Seconds 4
-    Start-Process -FilePath $steamPath
-}
-
-#endregion
 
 function Main {
     try {
@@ -682,28 +798,7 @@ function Main {
         }
 
         # Build open file dialog to pick the Supermodel emulator folder
-        Add-Type -AssemblyName System.Windows.Forms 
-
-        $dirSelect = New-Object System.Windows.Forms.FolderBrowserDialog
-        $dirSelect.RootFolder = 'UserProfile'
-        $dirSelect.Description = "Choose in which folder to install the Sega Model 3 - Supermodel emulator..."
-        $dirSelect.ShowNewFolderButton = $true
-    
-        do {
-            $result = $dirSelect.ShowDialog()
-            if ($result -ne [System.Windows.Forms.DialogResult]::OK) {
-                Write-Warning "Canceled folder selection. Aborting script..."
-                exit 1
-            }
-        
-            $validPath = Test-Path $dirSelect.SelectedPath
-            if (-not $validPath) {
-                Write-Warning "Given path '$targetPath' was not valid or could not be found. Please retry."
-            }
-        
-        } while (-not $validPath)
-
-        $selectedPath = $dirSelect.SelectedPath
+        $selectedPath = Get-TargetFolder
         
         # Prompt user to download Supermodel emulator
         $cont = Read-BinaryChoice -Prompt "Download the SEGA Model 3 Supermodel emulator to '$selectedPath'?`n(RECOMMENDED, this is required to be able to play SpikeOut at all. Enter N(o) only if you already have Supermodel downloaded) [Y/n]" -YesDefault:$true
@@ -723,21 +818,23 @@ function Main {
             Write-Information "Could not find Steam installation on current system..."
         }
 
-        $cont = Read-BinaryChoice -Prompt "Add shortcuts for SpikeOut: Digital Battle Online and Final Edition to your Steam library?`n(Recommended, as this will also set up all the input bindings for SpikeOut using Steam Input to work out-of-the-box. However, this requires Steam to be installed and actively running on your system.) [Y/n]" -YesDefault:$true
-        if ($cont) {
-            New-SteamShortcuts -SupermodelPath $selectedPath
+        # Automatically create standard Windows shortcuts and exit script if no Steam installation found 
+        if (-not $isSteamInstalled) {
+            New-RegularShortcuts -SupermodelPath $selectedPath
+            exit 0
         }
-        
-        Write-Warning @"
-The SpikeOut shortcuts should be working fine now, but you will have to manually enable Steam Input for the new shortcuts to have the SpikeOut controller config take effect. To do so:
 
-1. On either of the new SpikeOut shortcuts in your Steam Library (these only show up after you restarted Steam), click the Properties button in the pop-up menu.
-2. Go to the Controller tab, then change the "Override for SpikeOut: Final Edition / Digital Battle Online" option from "Use default settings" to "Enable Steam Input"
+        $cont = Read-Choice -Answers @(1, 2) -DefaultAnswer '1' -Prompt @"
+Select how you want to create your SpikeOut shortcuts:
+1) (RECOMMENDED) Create shortcuts for SpikeOut in your Steam library. This also sets up a custom Steam Input config with some useful macros, that are also likely to work on all types of controllers.
+2) Create standard Windows shortcuts. Uses XInput as an input system, and certain macros (pausing the emulator, savestate control, and a macro for special attacks) won't be available on your controller.
 
-After that, the custom provided SpikeOut controller config should be automatically applied when you start the game!
-
-NOTE: You are going to have to find the SpikeOut ROMs (spikeout.zip and spikeofe.zip) yourself and place them in the ROMs directory of whereever you installed Supermodel ($(Join-Path $selectedPath "ROMs")) to be able to play the games.
+Enter a number (1, 2) to select your option
 "@
+        switch ($cont) {
+            '1' { New-SteamShortcuts -SupermodelPath $selectedPath; break }
+            '2' { New-RegularShortcuts -SupermodelPath $selectedPath; break }
+        }
     }
     catch {
         $err = [PSCustomObject]@{
@@ -752,6 +849,17 @@ NOTE: You are going to have to find the SpikeOut ROMs (spikeout.zip and spikeofe
 
         exit 1
     }
+    finally {
+        $ErrorActionPreference = $oldErrorActionPreference
+    }
 }
 
+#endregion
+
 Main
+
+# To run this script remotely, open a PowerShell window and copypaste the following command:
+# Invoke-RestMethod -Method Get 'https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/feature/init/Setup-SpikeOut/Setup-SpikeOut.ps1' | Invoke-Expression
+
+# If you're running this on a PowerShell version higher than 5.X, then you have to change the ExecutionPolicy first by running the following command:
+# Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
