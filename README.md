@@ -6,4 +6,4 @@ An installer script that sets up the newest version of the [Sega Model 3 Supermo
 
 Overview of the custom Steam controller config:
 
-![SpikeOut Steam Input controller configuration](Setup-Spikeout/resources/spikeout_controls_howto.jpg)
+![SpikeOut Steam Input controller configuration](Setup-SpikeOut/resources/spikeout_controls_howto.jpg)
