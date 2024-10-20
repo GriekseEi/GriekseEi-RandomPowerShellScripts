@@ -1,12 +1,12 @@
 "controller_mappings"
 {
 	"version"		"3"
-	"revision"		"120"
+	"revision"		"133"
 	"title"		"Supermodel - SpikeOut Gamepad (Powershell Setup)"
 	"description"		"Gamepad layout tuned for SpikeOut. This assumes Supermodel uses the control config imported by the Setup-SpikeOut PowerShell script, as otherwise this won't work."
 	"creator"		"76561198030980822"
 	"progenitor"		""
-	"url"		"workshop://3349883858"
+	"url"		"workshop://3352202597"
 	"export_type"		"personal_local"
 	"controller_type"		"controller_xbox360"
 	"controller_caps"		"1590271"
@@ -375,7 +375,7 @@
 					{
 						"bindings"
 						{
-							"binding"		"key_press 5, INSERT COIN, , "
+							"binding"		"key_press 5, INSERT CREDIT, , "
 						}
 						"settings"
 						{
@@ -689,7 +689,9 @@
 					{
 						"bindings"
 						{
-							"binding"		"key_press 7, SERVICE BUTTON, , "
+							"binding"		"key_press Z, PICK UP/THROW WEAPON | SWEEP, , "
+							"binding"		"key_press X, PICK UP/THROW WEAPON | SWEEP, , "
+							"binding"		"key_press DOWN_ARROW, PICK UP/THROW WEAPON | SWEEP, , "
 						}
 					}
 				}
