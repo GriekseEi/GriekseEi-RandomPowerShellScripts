@@ -554,6 +554,16 @@ function New-SteamShortcuts {
         [string] $SupermodelPath
     )
 
+    # Steam must be running so that we can read the ID of the current active Steam user in the registry
+    do {
+
+        $isSteamRunning = -not((Get-ItemPropertyValue "HKCU:\SOFTWARE\Valve\Steam\ActiveProcess" -Name ActiveUser -ErrorAction SilentlyContinue) -in @(0, $null))
+
+        if (-not $isSteamRunning) {
+            $null = Read-Host -Prompt "Could not detect that an instance of Steam was running on this system. Please launch Steam then press ENTER on this screen to try again"
+        }
+    } while (-not $isSteamRunning)
+
     # Download the Supermodel config tuned for use with Steam Input. This one has joystick binds removed from the native Supermodel config, so that it won't interfere with the Steam Input config.
     $configPath = [IO.Path]::Combine($SupermodelPath, 'Config', 'Supermodel.ini')
     Invoke-WebRequest -Method Get -Uri $SUPERMODEL_STEAM_CONFIG_URI -OutFile $configPath
@@ -642,7 +652,23 @@ function New-SteamShortcuts {
     Copy-Item -Path $configDownloadDest -Destination $spikeofeControllerConfigPath -Force
 
     Write-Information "Successfully copied SpikeOut controller configs to the controller config folder!"
+
+    $cont = Read-BinaryChoice -Prompt "Steam must be restarted for the new shortcuts to appear in your library. Restart Steam now? [Y/n]" -YesDefault:$true
+    if ($cont) { Restart-Steam }
 }
+
+function Restart-Steam {
+    $steamProcess = Get-Process -Name 'Steam'
+    $steamPath = $steamProcess.Path
+
+    # Use Steam's own shutdown mechanism for a graceful restart
+    Start-Process $steamPath -ArgumentList '-Shutdown' -Wait
+
+    # We need to wait a bit before being able to restart Steam again
+    Start-Sleep -Seconds 4
+    Start-Process -FilePath $steamPath
+}
+
 #endregion
 
 function Main {
@@ -699,24 +725,14 @@ function Main {
 
         $cont = Read-BinaryChoice -Prompt "Add shortcuts for SpikeOut: Digital Battle Online and Final Edition to your Steam library?`n(Recommended, as this will also set up all the input bindings for SpikeOut using Steam Input to work out-of-the-box. However, this requires Steam to be installed and actively running on your system.) [Y/n]" -YesDefault:$true
         if ($cont) {
-            do {
-                # Steam must be running so that we can read the ID of the current active Steam user in the registry
-                $isSteamRunning = -not((Get-ItemPropertyValue "HKCU:\SOFTWARE\Valve\Steam\ActiveProcess" -Name ActiveUser -ErrorAction SilentlyContinue) -in @(0, $null))
-
-                if (-not $isSteamRunning) {
-                    $null = Read-Host -Prompt "Could not detect that an instance of Steam was running on this system. Please launch Steam then press ENTER on this screen to try again"
-                }
-            } while (-not $isSteamRunning)
-
             New-SteamShortcuts -SupermodelPath $selectedPath
         }
         
         Write-Warning @"
 The SpikeOut shortcuts should be working fine now, but you will have to manually enable Steam Input for the new shortcuts to have the SpikeOut controller config take effect. To do so:
 
-1. Restart your Steam client (the new SpikeOut shortcuts won't show up until you do)
-2. On either of the new SpikeOut shortcuts in your Steam Library, click the Properties button in the pop-up menu.
-3. Go to the Controller tab, then change the "Override for SpikeOut: Final Edition / Digital Battle Online" option from "Use default settings" to "Enable Steam Input"
+1. On either of the new SpikeOut shortcuts in your Steam Library (these only show up after you restarted Steam), click the Properties button in the pop-up menu.
+2. Go to the Controller tab, then change the "Override for SpikeOut: Final Edition / Digital Battle Online" option from "Use default settings" to "Enable Steam Input"
 
 After that, the custom provided SpikeOut controller config should be automatically applied when you start the game!
 
