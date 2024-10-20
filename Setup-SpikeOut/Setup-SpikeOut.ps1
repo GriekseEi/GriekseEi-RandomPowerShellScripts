@@ -617,6 +617,8 @@ function New-WindowsShortcut {
 
     Copy-Item -Path $ShortcutLocation -Destination ([IO.Path]::Combine($HOME, "Desktop", (Split-Path $ShortcutLocation -Leaf))) -Force
     Write-Information "Created shortcut at $ShortcutLocation and copied it to desktop."
+
+    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($WScriptShell)
 }
 
 function Get-Icon {
