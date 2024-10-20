@@ -37,12 +37,12 @@ $ErrorActionPreference = 'Stop'
 
 # URLs for various resources we need to download
 $BASE_SUPERMODEL_URI                = 'https://supermodel3.com/'
-$SUPERMODEL_STEAM_CONFIG_URI        = 'https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/feature/init/Setup-SpikeOut/resources/steamconfig/Supermodel.ini'
-$SUPERMODEL_NONSTEAM_CONFIG_URI     = 'https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/feature/init/Setup-SpikeOut/resources/nonsteamconfig/Supermodel.ini'
-$SPIKEOUT_STEAM_INPUT_CONFIG_URI    = 'https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/feature/init/Setup-SpikeOut/resources/supermodel%20-%20spikeout%20gamepad%20(powershell%20setup)_0.vdf'
-$SPIKEOUT_ICO_URI                   = 'https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/feature/init/Setup-SpikeOut/resources/spikeout.ico'
-$SPIKEOFE_ICO_URI                   = 'https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/feature/init/Setup-SpikeOut/resources/spikeofe.ico'
-$SPIKEOUT_CONTROLS_URI              = 'https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/feature/init/Setup-SpikeOut/resources/spikeout_controls_howto.jpg'
+$SUPERMODEL_STEAM_CONFIG_URI        = 'https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/main/Setup-SpikeOut/resources/steamconfig/Supermodel.ini'
+$SUPERMODEL_NONSTEAM_CONFIG_URI     = 'https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/main/Setup-SpikeOut/resources/nonsteamconfig/Supermodel.ini'
+$SPIKEOUT_STEAM_INPUT_CONFIG_URI    = 'https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/main/Setup-SpikeOut/resources/supermodel%20-%20spikeout%20gamepad%20(powershell%20setup)_0.vdf'
+$SPIKEOUT_ICO_URI                   = 'https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/main/Setup-SpikeOut/resources/spikeout.ico'
+$SPIKEOFE_ICO_URI                   = 'https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/main/Setup-SpikeOut/resources/spikeofe.ico'
+$SPIKEOUT_CONTROLS_URI              = 'https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/main/Setup-SpikeOut/resources/spikeout_controls_howto.jpg'
 
 # Values of the type bytes used in binary VDFs to signify the type of the next value. See the Binary VDF documentation
 $global:TYPE_MAP       = [byte] 0
@@ -863,7 +863,7 @@ Enter a number (1, 2) to select your option
 Main
 
 # To run this script remotely, open a PowerShell window and copypaste the following command:
-# Invoke-RestMethod -Method Get 'https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/feature/init/Setup-SpikeOut/Setup-SpikeOut.ps1' | Invoke-Expression
+# Invoke-RestMethod -Method Get 'https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/main/Setup-SpikeOut/Setup-SpikeOut.ps1' | Invoke-Expression
 
 # If you're running this on a PowerShell version higher than 5.X, then you have to change the ExecutionPolicy first by running the following command:
 # Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
