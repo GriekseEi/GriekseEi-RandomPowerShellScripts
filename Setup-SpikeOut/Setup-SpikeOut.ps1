@@ -573,7 +573,7 @@ Enter a number from 1 to 3 to select your option
         }
 
         $useSSAA = Read-Choice -Prompt "`nUse SSAA (supersampling anti-aliasing)? This will reduce jagged edges but is more taxing on your hardware.`nEnter a value from 1 to 8 to set SSAA strength, or enter nothing or 0 to disable SSAA" -Answers @(0..8) -DefaultAnswer '0'
-        if ($useSSAA -ne '0') { $launchOptions += "-ss $useSSAA" } 
+        if ($useSSAA -ne '0') { $launchOptions += "-ss=$useSSAA" } 
 
         $useWidescreen = Read-BinaryChoice -Prompt "`nDo you want to enable widescreen hacks for SpikeOut?`n(This lets you see more around you, but can cause unimportant graphical glitches during loading screens and stage transitions) [Y/n]" -YesDefault:$true
         if ($useWidescreen) { $launchOptions += '-wide-bg', '-wide-screen' }
