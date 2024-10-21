@@ -1,3 +1,5 @@
+#requires -Version 5.0
+
 <#
     .SYNOPSIS
         Windows Supermodel emulator + SpikeOut install wizard script
@@ -9,7 +11,7 @@
         custom Steam Input controller config that allows for more macros and button shortcuts than what the native Supermodel input 
         scheme would allow. If Steam isn't installed on the host system, then standard desktop shortcuts for SpikeOut will be made.
     .NOTES
-        - Designed to work with the default PowerShell installation on most WIndows systems (PS 5.1) for total out-of-the-box compatibility.
+        - Designed to work with the default PowerShell installation on most Windows systems (PS 5.1) for total out-of-the-box compatibility.
 
         - This script does not supply the SpikeOut ROMs. For legal reasons these have to be found yourself and placed in the ROMs directory of
         the Supermodel folder. 
@@ -36,13 +38,17 @@ $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 # URLs for various resources we need to download
+$CurrentBranch                      = 'main'
 $BASE_SUPERMODEL_URI                = 'https://supermodel3.com/'
-$SUPERMODEL_STEAM_CONFIG_URI        = 'https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/main/Setup-SpikeOut/resources/steamconfig/Supermodel.ini'
-$SUPERMODEL_NONSTEAM_CONFIG_URI     = 'https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/main/Setup-SpikeOut/resources/nonsteamconfig/Supermodel.ini'
-$SPIKEOUT_STEAM_INPUT_CONFIG_URI    = 'https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/main/Setup-SpikeOut/resources/supermodel%20-%20spikeout%20gamepad%20(powershell%20setup)_0.vdf'
-$SPIKEOUT_ICO_URI                   = 'https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/main/Setup-SpikeOut/resources/spikeout.ico'
-$SPIKEOFE_ICO_URI                   = 'https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/main/Setup-SpikeOut/resources/spikeofe.ico'
-$SPIKEOUT_CONTROLS_URI              = 'https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/main/Setup-SpikeOut/resources/spikeout_controls_howto.jpg'
+$SUPERMODEL_STEAM_CONFIG_URI        = "https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/$CurrentBranch/Setup-SpikeOut/resources/steamconfig/Supermodel.ini"
+$SUPERMODEL_NONSTEAM_CONFIG_URI     = "https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/$CurrentBranch/Setup-SpikeOut/resources/nonsteamconfig/Supermodel.ini"
+$SPIKEOUT_STEAM_INPUT_CONFIG_URI    = "https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/$CurrentBranch/Setup-SpikeOut/resources/supermodel%20-%20spikeout%20gamepad%20(powershell%20setup)_0.vdf"
+$SPIKEOUT_ICO_URI                   = "https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/$CurrentBranch/Setup-SpikeOut/resources/spikeout.ico"
+$SPIKEOFE_ICO_URI                   = "https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/$CurrentBranch/Setup-SpikeOut/resources/spikeofe.ico"
+$SPIKEOUT_CONTROLS_URI              = "https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/$CurrentBranch/Setup-SpikeOut/resources/spikeout_controls_howto.jpg"
+
+# We're leaving the Steam Deck configset ('neptune') out of this since it's unlikely anybody is running Windows and this script on one
+$CONTROLLER_TYPES = @("ps4", "ps5", "ps5_edge", "xboxelite", "xboxone", "xbox360", "switch_pro", "steamcontroller_gordon", "generic")
 
 # Values of the type bytes used in binary VDFs to signify the type of the next value. See the Binary VDF documentation
 $global:TYPE_MAP       = [byte] 0
@@ -54,11 +60,130 @@ $global:TYPE_MAPEND    = [byte] 8
 
 #endregion
 
+#region VDF functions
+
+function ConvertFrom-VDF {
+    <#
+        .SYNOPSIS
+            Converts a Steam VDF (KeyValues) text file to an ordered hashtable
+        .PARAMETER InputObject
+            A string array of all lines in a VDF file
+        .PARAMETER CurrentLine
+            A ref counter for keeping track of what depth level of the VDF we're currently in. Only used for when this function is called recursively
+        .PARAMETER RegExCompare
+            The regex for capturing the key, value, and brace symbols of the current line
+        .OUTPUTS
+            [OrderedDictionary] - The input VDF parsed as an ordered hashtable
+        .EXAMPLE
+            PS> $vdf = ConvertFrom-VDF ([IO.File]::ReadAllLines('./test.vdf'))
+        .NOTES
+            Original code and regex by u/SMFX
+            Source: https://www.reddit.com/r/PowerShell/comments/egosaf/comment/fcambsr/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button
+        .LINK
+            https://developer.valvesoftware.com/wiki/VDF
+    #>
+    param(
+        [Parameter(Mandatory)]
+        [ValidateScript({$_.Count -gt 0})]
+        [string[]] $InputObject,
+
+        [ref] $CurrentLine = ([ref]0),
+
+        [ValidateNotNullOrEmpty()]
+        [string] $RegExCompare = '\A\s*((?<Key>"[^"]+")|(?<Brace>[\{\}]))\s*(?<LineValue>"[^"]*")?\Z'
+    )
+
+    $currTable = [ordered]@{}
+
+    while ($currentLine.Value -lt $InputObject.Count) {
+        if ($InputObject[$currentLine.Value] -match $RegExCompare) {
+            if ($matches.Key) { 
+                $currKey = $matches.Key 
+            }
+
+            # Call function recursively for each object we encounter (as signified by an opening curly brace) until we hit a closing curly brace
+            if ($matches.LineValue) { 
+                $currTable.$currKey = $matches.LineValue 
+            }
+            elseif ($matches.Brace -eq '{') {
+                $currentLine.Value++
+                $currTable.$currKey = ConvertFrom-VDF -InputObject $InputObject -CurrentLine $CurrentLine -RegExCompare $RegExCompare
+            } elseif ($matches.Brace -eq '}') {
+                break
+            }
+        }
+        else {
+            throw [System.Data.SyntaxErrorException] "Error while parsing VDF: Could not capture either key or value at line $($CurrentLine.Value)"
+        }
+
+        $currentLine.Value++
+    }
+
+    return $currTable
+}
+
+function ConvertTo-VDF {
+    <#
+        .SYNOPSIS
+            Convert an ordered hashtable to the Steam VDF format
+        .PARAMETER InputObject
+            The ordered hashtable to convert to a VDF string
+        .PARAMETER Depth
+            A ref counter for keeping track of what depth level of the VDF we're currently in. Only used for when this function is called recursively
+        .OUTPUTS
+            [string] - A string representation of a VDF object
+        .LINK
+            https://developer.valvesoftware.com/wiki/VDF
+    #>
+    param(
+        [Parameter(Mandatory)]
+        [ValidateScript({$_.Count -gt 0})]
+        [System.Collections.Specialized.OrderedDictionary] $InputObject,
+
+        [ref] $Depth = ([ref]0)
+    )
+
+    $root = [System.Collections.Generic.List[string]]::new()
+    # Indent new values accordingly depending on their depth level
+    $tabs = "`t" * $Depth.Value
+
+    foreach ($entry in $InputObject.GetEnumerator()) {
+        if ($entry.Value.GetType() -eq [System.Collections.Specialized.OrderedDictionary]) {
+            # Keys and curly braces have each to be on their own lines
+            $Depth.Value++
+            $root.Add($tabs + $entry.Key)
+            $root.Add($tabs + "{")
+            $root.AddRange((ConvertTo-VDF -InputObject $entry.Value -Depth $Depth))
+            $root.Add($tabs + "}")
+            $Depth.Value--
+        }
+        else {
+            # There's always two tabs between a key and a value
+            $root.Add($tabs + $entry.Key + "`t`t" + $entry.Value)
+        }
+    }
+
+    # Once we've iterated everything and the depth is at zero, we can join the root and return it as a string
+    if ($Depth.Value -eq 0) {
+        # VDF files always end on a newline
+        return ($root -join "`n") + "`n"
+    }
+    else {
+        return ,$root
+    }
+}
+
+#endregion
+
 #region Binary VDF functions
 
 #region Binary VDF Read fynctions
 
 class BufferReader {
+    <#
+        .SYNOPSIS
+            A class for reading values out of a binary VDF byte array
+    #>
     [byte[]] $Buffer
     [int] $Offset
 
@@ -154,7 +279,7 @@ function Get-NextMapItem {
 
     $typeByte = $Buffer.ReadNextByte()
     if ($typeByte -eq $global:TYPE_MAPEND) {
-        return @{
+        return [ordered]@{
             Type = $typeByte
         }
     }
@@ -183,7 +308,7 @@ function Get-NextMapItem {
         }
     }
 
-    return @{
+    return [ordered]@{
         Type = $typeByte
         Name = $name
         Value = $value
@@ -193,9 +318,7 @@ function Get-NextMapItem {
 function Get-NextMap {
     param([BufferReader] $Buffer)
 
-    # Use SortedList as map type for alphabetical key sorting and consistently reproducible output, as keys in standard hashtables often tend to be sorted randomly
-    $contents = [System.Collections.Generic.SortedList[string, object]]::new()
-    # $contents = @{}
+    $contents = [ordered]@{}
 
     while ($true) {
         $mapItem = Get-NextMapItem -Buffer $Buffer
@@ -220,7 +343,7 @@ function ConvertFrom-BinaryVDF {
 }
 #endregion
 
-#region VDF write functions
+#region Binary VDF write functions
 
 function Add-String {
     param(
@@ -254,7 +377,7 @@ function Add-Number {
 
 function Add-Map {
     param(
-        [hashtable] $Map,
+        [System.Collections.Specialized.OrderedDictionary] $Map,
         [System.Collections.Generic.List[byte]] $Contents
     )
 
@@ -286,7 +409,7 @@ function Add-Map {
                 Add-String -Value $value -Contents $Contents -Encoding ([System.Text.Encoding]::UTF8)
                 break
             }
-            'SortedList`2' {
+            'OrderedDictionary' {
                 $Contents.Add($global:TYPE_MAP)
                 Add-String -Value $key -Contents $Contents -Encoding ([System.Text.Encoding]::GetEncoding('ISO-8859-1'))
                 Add-Map -Map $value -Contents $Contents
@@ -302,8 +425,7 @@ function Add-Map {
 }
 
 function ConvertTo-BinaryVDF {
-    [OutputType([byte[]])]
-    param([hashtable] $Map)
+    param([System.Collections.Specialized.OrderedDictionary] $Map)
 
     $contents = [System.Collections.Generic.List[byte]]::new()
 
@@ -313,13 +435,65 @@ function ConvertTo-BinaryVDF {
 }
 #endregion
 
-#region shortcuts.vdf manipulation functions
+#endregion
+
+#region VDF manipulation functions
+
+function Set-DefaultControllerConfigTemplate {
+    <#
+        .SYNOPSIS
+            Updates the given config set to use the SpikeOut config templates as default for SpikeOut
+        .PARAMETER ConfigSetPath
+            The path to the config set to update or create if it doesn't exist yet
+    #>
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string] $ConfigSetPath
+    )
+
+    # Create a default config set for the given controller if one doesn't exist yet
+    if (-not(Test-Path $ConfigSetPath)) {
+        $defaultConfigSet = [ordered]@{
+            '"controller_config"' = [ordered]@{
+                '"spikeout digital battle online"' = [ordered]@{
+                    '"template"' = '"CLOUD_spikeout digital battle online/supermodel - spikeout gamepad (powershell setup)_0"'
+                }
+                '"spikeout final edition"' = [ordered]@{
+                    '"template"' = '"CLOUD_spikeout final edition/supermodel - spikeout gamepad (powershell setup)_0"'
+                }
+            }
+        }
+
+        [IO.File]::WriteAllText($ConfigSetPath, (ConvertTo-VDF $defaultConfigSet))
+        Write-Information "Created a new config set at $configSetPath to use the custom SpikeOut control config as default"
+        return
+    }
+
+    $configSet = ConvertFrom-VDF ([IO.File]::ReadAllLines($ConfigSetPath))
+
+    # For the VDF format, all keys and values have to be encased in double-quotes
+    if (-not($configSet.Contains('"controller_config"'))) {
+        throw [System.IO.InvalidDataException] "Could not find required root element 'controller_config' when trying to import '$ConfigSetPath' as VDF"
+    }
+
+    $configSet['"controller_config"']['"spikeout digital battle online"'] = [ordered]@{
+        '"template"' = '"CLOUD_spikeout digital battle online/supermodel - spikeout gamepad (powershell setup)_0"'
+    }
+
+    $configSet['"controller_config"']['"spikeout final edition"'] = [ordered]@{
+        '"template"' = '"CLOUD_spikeout final edition/supermodel - spikeout gamepad (powershell setup)_0"'
+    }
+
+    [IO.File]::WriteAllText($ConfigSetPath, (ConvertTo-VDF $configSet))
+    Write-Information "Updated config set at $ConfigSetPath to use the custom SpikeOut control config as default"
+}
 
 function Add-NonSteamGameShortcut {
     param(
         [Parameter(Mandatory)]
-        [ValidateScript({$_.ContainsKey('shortcuts')})]
-        [System.Collections.Generic.SortedList[string, object]] $Map,
+        [ValidateScript({$_.Contains('shortcuts')})]
+        [System.Collections.Specialized.OrderedDictionary] $Map,
 
         [Parameter(Mandatory)]
         [ValidateNotNullOrEmpty()]
@@ -356,12 +530,12 @@ function Add-NonSteamGameShortcut {
     }
     else {
         # New key value will be the last key integer value incremented by 1
-        $newKey = [string](([int]($Map['shortcuts'].Keys[-1])) + 1)
+        $newKey = [string](([int]($Map['shortcuts'].Keys[$Map['shortcuts'].Keys.Count - 1])) + 1)
 
         # Check if generated App ID does not conflict with App IDs of existing non-Steam games in shortcuts.vdf
         $existingAppIds = [System.Collections.Generic.List[uint32]]::new()
         foreach ($shortcut in $Map['shortcuts'].GetEnumerator()) {
-            if ($shortcut.Value.ContainsKey('appid')) {
+            if ($shortcut.Value.Contains('appid')) {
                 $existingAppIds.Add([uint32]$shortcut.Value['appid'])
             }
         }
@@ -379,15 +553,12 @@ function Add-NonSteamGameShortcut {
         if ($shortcut.Value['AppName'] -eq $AppName) {
             $promptRes = Read-BinaryChoice -Prompt "Found an existing shortcut in shortcuts.vdf that already has the app name '$AppName'. Enter Y to overwrite the existing shortcut or N to add another shortcut with the same app name. [Y/n]" -YesDefault:$true
 
-            if ($promptRes) {
-                $newKey = $shortcut.Key
-            }
-
+            if ($promptRes) { $newKey = $shortcut.Key }
             break
         }
     }
 
-    $newShortcut = [System.Collections.Generic.SortedList[string, object]]::new()
+    $newShortcut = [ordered]@{}
     $newShortcut['AppName'] = $AppName
     $newShortcut['appid'] = $appId
     $newShortcut['exe'] = $ExeLocation
@@ -406,17 +577,23 @@ function Add-NonSteamGameShortcut {
 
 #endregion
 
-#endregion
-
 #region Utility functions
 
 function Read-BinaryChoice {
+    <#
+        .SYNOPSIS
+            Prompts the user to make a yes/no choice
+        .PARAMETER Prompt
+            The text with which to prompt the user with
+        .PARAMETER YesDefault
+            Whether to return true by default if no answer was returned
+    #>
     param(
         [Parameter(Mandatory)] [string] $Prompt,
         [Parameter(Mandatory)] [boolean] $YesDefault
     )
 
-    $yesAnswers = @("yes", "y", "ye", "yeah")
+    $yesAnswers = @("yes", "y", "ye", "yea", "yeah")
     $noAnswers = @("no", "n", "nah", "nope", "nop")
 
     do {
@@ -436,10 +613,27 @@ function Read-BinaryChoice {
 }
 
 function Read-Choice {
+    <#
+        .SYNOPSIS
+            Prompts the user to make a choice out of one of multiple possible answers
+        .PARAMETER Prompt
+            The text with which to prompt the user with
+        .PARAMETER Answers
+            A string array of possible answers
+        .PARAMETER DefaultAnswer
+            The default answer that's returned if no answer is returned after the prompt
+    #>
     param(
-        [Parameter(Mandatory)] [string] $Prompt,
-        [Parameter(Mandatory)] [string[]] $Answers,
-        [Parameter(Mandatory)] $DefaultAnswer
+        [Parameter(Mandatory)] 
+        [ValidateNotNullOrEmpty()]
+        [string] $Prompt,
+
+        [Parameter(Mandatory)] 
+        [ValidateScript({$_.Count -gt 0})]
+        [string[]] $Answers,
+
+        [Parameter(Mandatory)] 
+        $DefaultAnswer
     )
 
     do {
@@ -459,10 +653,14 @@ function Read-Choice {
 }
 
 function Get-TargetFolder {
+    <#
+        .SYNOPSIS
+            Prompts the user with a FolderBrowserDialog to select the directory for the Supermodel installation
+    #>
     Add-Type -AssemblyName System.Windows.Forms 
 
     $dirSelect = New-Object System.Windows.Forms.FolderBrowserDialog
-    $dirSelect.RootFolder = 'UserProfile'
+    $dirSelect.RootFolder = 'MyComputer'
     $dirSelect.Description = "Choose in which folder to install the Sega Model 3 - Supermodel emulator..."
     $dirSelect.ShowNewFolderButton = $true
 
@@ -484,21 +682,39 @@ function Get-TargetFolder {
 }
 
 function Get-LatestSupermodelDownload {
+    <#
+        .SYNOPSIS
+            Downloads and extracts the archive of the newest Windows Supermodel build
+        .PARAMETER TargetPath
+            The path to where we want to download and setup Supermodel
+        .PARAMETER SupermodelUri
+            The URI for the homepage of the Supermodel emulator
+        .EXAMPLE
+            PS> Get-LatestSupermodelDownload -TargetPath $HOME/Supermodel -SupermodelUri 'https://supermodel3.com/'
+
+            Downloads and unzips the latest Supermodel build to $HOME/Supermodel
+    #>
     param(
-        [string] $TargetPath
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string] $TargetPath,
+
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string] $SupermodelUri
     )
 
-    Write-Information "Checking $BASE_SUPERMODEL_URI for the newest download..."
+    Write-Information "Checking $SupermodelUri for the newest download..."
 
-    $page = Invoke-WebRequest -Method Get -Uri ($BASE_SUPERMODEL_URI + 'Download.html') -UseBasicParsing
+    $page = Invoke-WebRequest -Method Get -Uri ($SupermodelUri + 'Download.html') -UseBasicParsing
 
     # The link for the newest Windows build should NORMALLY be the first entry in the list of href links of the Download page that contains 'Supermodel_'
     $uriPart = ($page.Links.href | Where-Object {$_ -match 'Supermodel_'})[0]
     if ([string]::IsNullOrEmpty($uriPart)) {
-        throw [System.InvalidOperationException] "Could not parse download link of latest Supermodel build at $($BASE_SUPERMODEL_URI + 'Download.html')"
+        throw [System.InvalidOperationException] "Could not parse download link of latest Supermodel build at $($SupermodelUri + 'Download.html')"
     }
 
-    $downloadUri = $BASE_SUPERMODEL_URI + $uriPart
+    $downloadUri = $SupermodelUri + $uriPart
     $extension = [System.IO.Path]::GetExtension($downloadUri)
     $outputPath = Join-Path $TargetPath ('supermodel' + $extension)
 
@@ -523,19 +739,28 @@ function Get-LatestSupermodelDownload {
 }
 
 function Restart-Steam {
-    $steamProcess = Get-Process -Name 'Steam'
-    $steamPath = $steamProcess.Path
+    $steamProcess = Get-Process -Name 'Steam' -ErrorAction SilentlyContinue
+
+    # If Steam was already shut down before calling this function then we don't really consider it a terminating error anyways
+    if ($null -eq $steamProcess) {
+        Write-Information "Steam was already shut down. Skipping..."
+        return
+    }
 
     # Use Steam's own shutdown mechanism for a graceful restart
+    $steamPath = $steamProcess.Path
     Start-Process $steamPath -ArgumentList '-Shutdown' -Wait
 
-    # We need to wait a bit before being able to restart Steam again
+    # We need to wait a bit before being able to restart Steam again. 8 secs is usually enough
     Start-Sleep -Seconds 8
     Start-Process -FilePath $steamPath
 }
 
 function New-SpikeOutLaunchOptions {
-
+    <#
+        .SYNOPSIS
+            Prompts the user several times to construct the launch options for the SpikeOut shortcuts
+    #>
     do {
         # Add the -throttle option for preventing the emulator from running too fast on displays higher than 60Hz
         $launchOptions = @('-throttle')
@@ -543,8 +768,8 @@ function New-SpikeOutLaunchOptions {
         $windowModeSelection = Read-Choice -Answers @(1..3)  -DefaultAnswer '1' -Prompt @"
 Which window mode do you want to use for the Supermodel emulator?
 1) Fullscreen (default)
-2) Windowed
-3) Borderless windowed
+2) Windowed 
+3) Borderless windowed (not recommended, doesn't seem to behave like an actual borderless window)
 Enter a number from 1 to 3 to select your option
 "@
 
@@ -572,11 +797,14 @@ Enter a number from 1 to 3 to select your option
             }
         }
 
-        $useSSAA = Read-Choice -Prompt "`nUse SSAA (supersampling anti-aliasing)? This will reduce jagged edges but is more taxing on your hardware.`nEnter a value from 1 to 8 to set SSAA strength, or enter nothing or 0 to disable SSAA" -Answers @(0..8) -DefaultAnswer '0'
+        $useSSAA = Read-Choice -Prompt "`nUse SSAA (supersampling anti-aliasing)? This will reduce jagged edges but will reduce performance.`nEnter a value from 1 to 8 to set SSAA strength, or enter nothing or 0 to disable SSAA" -Answers @(0..8) -DefaultAnswer '0'
         if ($useSSAA -ne '0') { $launchOptions += "-ss=$useSSAA" } 
 
-        $useWidescreen = Read-BinaryChoice -Prompt "`nDo you want to enable widescreen hacks for SpikeOut?`n(This lets you see more around you, but can cause unimportant graphical glitches during loading screens and stage transitions) [Y/n]" -YesDefault:$true
+        $useWidescreen = Read-BinaryChoice -Prompt "`nDo you want to enable widescreen hacks for SpikeOut?`n(This lets you see more around you, but can cause unimportant graphical glitches at the sides of the screen) [Y/n]" -YesDefault:$true
         if ($useWidescreen) { $launchOptions += '-wide-bg', '-wide-screen' }
+
+        $useCrtColors = Read-BinaryChoice -Prompt "`nApply ARI/D93 color correction to have the colors more closely resemble what you'd see on CRT displays on actual SpikeOut cabinets? [Y/n]" -YesDefault:$true
+        if ($useCrtColors) { $launchOptions += "-crtcolors=1" }
 
         if ([string]::IsNullOrEmpty($resolution)) { $resolutionResult = 'Default' } 
         else { $resolutionResult = $resolution } 
@@ -586,7 +814,8 @@ Enter a number from 1 to 3 to select your option
 Window mode: $windowMode
 Resolution: $resolutionResult
 SSAA: $useSSAA
-Widescreen: $($useWidescreen.ToString())
+ARI/D93 CRT color adaptation post processing: $useCrtColors
+Widescreen: $useWidescreen
 
 Continue with these options? [Y/n]
 "@
@@ -599,12 +828,44 @@ Continue with these options? [Y/n]
 }
 
 function New-WindowsShortcut {
+    <#
+        .SYNOPSIS
+            Creates a new Windows shortcut using the Windows Script Host
+        .PARAMETER ExeLocation
+            The location of the .exe the shortcut points to
+        .PARAMETER IconLocation
+            The location of the .ico file for the shortcut
+        .PARAMETER LaunchOptions
+            The launch options for the .exe
+        .PARAMETER WorkingDirectory
+            The working directory of the .exe
+        .PARAMETER ShortcutLocation
+            The destination of the shortcut file itself
+        .PARAMETER CopyToDesktop
+            Whether the shortcut file should also be copied to the desktop
+        .LINK
+            https://learn.microsoft.com/en-us/troubleshoot/windows-client/admin-development/create-desktop-shortcut-with-wsh
+    #>
     param(
-        [string] $WorkingDirectory,
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
         [string] $ExeLocation,
-        [string] $IcoLocation,
+
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
         [string] $ShortcutLocation,
-        [string] $LaunchOptions
+
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string] $IcoLocation,
+
+        [ValidateNotNullOrEmpty()]
+        [string] $LaunchOptions = '',
+
+        [ValidateNotNullOrEmpty()]
+        [string] $WorkingDirectory = '',
+
+        [switch] $CopyToDesktop
     )
 
     $WScriptShell = New-Object -ComObject WScript.Shell
@@ -615,22 +876,42 @@ function New-WindowsShortcut {
     $shortcut.WorkingDirectory = $WorkingDirectory
     $shortcut.Save()
 
-    Copy-Item -Path $ShortcutLocation -Destination ([IO.Path]::Combine($HOME, "Desktop", (Split-Path $ShortcutLocation -Leaf))) -Force
-    Write-Information "Created shortcut at $ShortcutLocation and copied it to desktop."
+    if ($CopyToDesktop) {
+        Copy-Item -Path $ShortcutLocation -Destination ([IO.Path]::Combine($HOME, "Desktop", (Split-Path $ShortcutLocation -Leaf))) -Force
+        Write-Information "Created shortcut at $ShortcutLocation and copied it to desktop."
+    }
 
-    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($WScriptShell)
+    $null = [System.Runtime.Interopservices.Marshal]::ReleaseComObject($WScriptShell)
 }
 
 function Get-Icon {
+    <#
+        .SYNOPSIS
+            Downloads an .ico file from the given URI to the given folder
+        .PARAMETER IconsPath
+            The folder where the .ico file should be downloaded to
+        .PARAMETER IconName
+            The filename of the downloaded .ico file
+        .PARAMETER IconUri
+            The download URI of the .ico file
+    #>
     param(
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
         [string] $IconsPath,
+
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
         [string] $IconName,
+
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
         [string] $IconUri
     )
 
 	if (-not(Test-Path $IconsPath)) {
 		$null = New-Item $IconsPath -ItemType Directory
-		Write-Information "Created icons folder in Supermodel directory"
+		Write-Information "Created icons target directory at '$IconsPath'"
 	}
 
 	$fullIcoPath = Join-Path $IconsPath $IconName
@@ -645,6 +926,8 @@ function Get-Icon {
 
 function New-RegularShortcuts {
     param(
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
         [string] $SupermodelPath
     )
 
@@ -668,20 +951,21 @@ function New-RegularShortcuts {
     $spikeoutIcoPath = Get-Icon -IconsPath $icoDirPath -IconName "spikeout.ico" -IconUri $SPIKEOUT_ICO_URI
     $spikeofeIcoPath = Get-Icon -IconsPath $icoDirPath -IconName "spikeofe.ico" -IconUri $SPIKEOFE_ICO_URI
 
-    New-WindowsShortcut -WorkingDirectory $SupermodelPath -ExeLocation $supermodelExePath -IcoLocation $spikeoutIcoPath -LaunchOptions $spikeoutLaunchOptions -ShortcutLocation (Join-Path $SupermodelPath "SpikeOut Digital Battle Online.lnk")
-    New-WindowsShortcut -WorkingDirectory $SupermodelPath -ExeLocation $supermodelExePath -IcoLocation $spikeofeIcoPath -LaunchOptions $spikeofeLaunchOptions -ShortcutLocation (Join-Path $SupermodelPath "SpikeOut Final Edition.lnk")
+    New-WindowsShortcut -WorkingDirectory $SupermodelPath -ExeLocation $supermodelExePath -IcoLocation $spikeoutIcoPath -LaunchOptions $spikeoutLaunchOptions -ShortcutLocation (Join-Path $SupermodelPath "SpikeOut Digital Battle Online.lnk") -CopyToDesktop
+    New-WindowsShortcut -WorkingDirectory $SupermodelPath -ExeLocation $supermodelExePath -IcoLocation $spikeofeIcoPath -LaunchOptions $spikeofeLaunchOptions -ShortcutLocation (Join-Path $SupermodelPath "SpikeOut Final Edition.lnk") -CopyToDesktop
 
     Write-Information "Operation successful! Remember that you can always change the Supermodel options by editing the launch options in the SpikeOut shortcut properties."
 }
 
 function New-SteamShortcuts {
     param(
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
         [string] $SupermodelPath
     )
 
     # Steam must be running so that we can read the ID of the current active Steam user in the registry
     do {
-
         $isSteamRunning = -not((Get-ItemPropertyValue "HKCU:\SOFTWARE\Valve\Steam\ActiveProcess" -Name ActiveUser -ErrorAction SilentlyContinue) -in @(0, $null))
 
         if (-not $isSteamRunning) {
@@ -770,6 +1054,12 @@ function New-SteamShortcuts {
 
     Write-Information "Successfully copied SpikeOut controller configs to the controller config folder!"
 
+    # For the config set of each controller types, set the default config for SpikeOut DBO/FE to use our custom Steam Input config
+    foreach ($controllerType in $CONTROLLER_TYPES) {
+        $configSetPath = Join-Path $controllerConfigPath "configset_controller_$controllerType.vdf"
+        Set-DefaultControllerConfigTemplate -ConfigSetPath $configSetPath
+    }
+
     # Prompt user to restart Steam
     $cont = Read-BinaryChoice -Prompt "Steam must be restarted for the new shortcuts to appear in your library. Restart Steam now? [Y/n]" -YesDefault:$true
     if ($cont) { Restart-Steam }
@@ -807,7 +1097,7 @@ function Main {
         # Prompt user to download Supermodel emulator
         $cont = Read-BinaryChoice -Prompt "Download the SEGA Model 3 Supermodel emulator to '$selectedPath'?`n(RECOMMENDED, this is required to be able to play SpikeOut at all. Enter N(o) only if you already have Supermodel downloaded) [Y/n]" -YesDefault:$true
         if ($cont) {
-            Get-LatestSupermodelDownload -TargetPath $selectedPath
+            Get-LatestSupermodelDownload -TargetPath $selectedPath -SupermodelUri $BASE_SUPERMODEL_URI
         }
         else {
             if (-not(Test-Path -Path (Join-Path $selectedPath "Supermodel.exe"))) {
@@ -861,9 +1151,3 @@ Enter a number (1, 2) to select your option
 #endregion
 
 Main
-
-# To run this script remotely, open a PowerShell window and copypaste the following command:
-# Invoke-RestMethod -Method Get 'https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/main/Setup-SpikeOut/Setup-SpikeOut.ps1' | Invoke-Expression
-
-# If you're running this on a PowerShell version higher than 5.X, then you have to change the ExecutionPolicy first by running the following command:
-# Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
