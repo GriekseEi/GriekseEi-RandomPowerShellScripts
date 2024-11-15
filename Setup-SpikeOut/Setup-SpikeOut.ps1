@@ -37,7 +37,7 @@ $ErrorActionPreference = 'Stop'
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$SCRIPT_VERSION = [version]'1.0.1'
+$SCRIPT_VERSION = [version]'1.0.2'
 
 # URLs for various resources we need to download
 $CurrentBranch = 'main'
@@ -526,8 +526,8 @@ function Add-NonSteamGameShortcut {
         # The first key in shortcuts is always '0'
         $newKey = '0'
     } else {
-        # New key value will be the last key integer value incremented by 1
-        $newKey = [string](([int]($Map['shortcuts'].Keys[$Map['shortcuts'].Keys.Count - 1])) + 1)
+        # New key value will be the last key integer value incremented by 1, which is always equal to the current count of the shortcuts hashtable
+        $newKey = $Map['shortcuts'].Count.ToString()
 
         # Check if generated App ID does not conflict with App IDs of existing non-Steam games in shortcuts.vdf
         $existingAppIds = [System.Collections.Generic.List[uint32]]::new()
@@ -745,9 +745,16 @@ function Restart-Steam {
         return
     }
 
-    # Use Steam's own shutdown mechanism for a graceful restart
     $steamPath = $steamProcess.Path
-    Start-Process $steamPath -ArgumentList '-Shutdown' -Wait
+
+    # In rare cases we may not be able to read the file path from the Steam process
+    if ([string]::IsNullOrEmpty($steamPath)) {
+        Write-Warning "Couldn't find path to Steam process. You'll have to restart Steam manually."
+        return
+    }
+
+    # Use Steam's own shutdown mechanism for a graceful restart
+    Start-Process -FilePath $steamPath -ArgumentList '-Shutdown' -Wait
 
     # We need to wait a bit before being able to restart Steam again. 8 secs is usually enough
     Start-Sleep -Seconds 8
