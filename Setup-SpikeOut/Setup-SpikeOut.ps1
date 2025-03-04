@@ -17,7 +17,7 @@
         the Supermodel folder.
 
         - The Steam Input version of the Supermodel.ini config has all relevant joystick inputs scrubbed to avoid issues related to both
-        Supermodel and Steam Input firing the same input simultaneously which *may* cause issues.
+        Supermodel and Steam Input firing the same input simultaneously, which *may* cause issues.
 
         Author: testament_enjoyment
     .LINK
@@ -37,17 +37,19 @@ $ErrorActionPreference = 'Stop'
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$SCRIPT_VERSION = [version]'1.0.2'
+$SCRIPT_VERSION = [version]'1.0.3'
 
 # URLs for various resources we need to download
-$CurrentBranch = 'main'
+$CurrentBranch = 'feature/add_truehz'  # This is only really used for debugging and testing
 $BASE_SUPERMODEL_URI = 'https://supermodel3.com/'
 $SUPERMODEL_STEAM_CONFIG_URI = "https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/$CurrentBranch/Setup-SpikeOut/resources/steamconfig/Supermodel.ini"
 $SUPERMODEL_NONSTEAM_CONFIG_URI = "https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/$CurrentBranch/Setup-SpikeOut/resources/nonsteamconfig/Supermodel.ini"
-$SPIKEOUT_STEAM_INPUT_CONFIG_URI = "https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/$CurrentBranch/Setup-SpikeOut/resources/supermodel%20-%20spikeout%20gamepad%20(powershell%20setup)_0.vdf"
+$SPIKEOUT_STEAM_INPUT_CONFIG_GAMEPAD_URI = "https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/$CurrentBranch/Setup-SpikeOut/resources/supermodel%20-%20spikeout%20gamepad%20(powershell%20setup)_0.vdf"
+$SPIKEOUT_STEAM_INPUT_CONFIG_FIGHTSTICK_URI = "https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/$CurrentBranch/Setup-SpikeOut/resources/supermodel%20-%20spikeout%20fightstickarcade%20stick%20(powershell%20setup)_0.vdf"
 $SPIKEOUT_ICO_URI = "https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/$CurrentBranch/Setup-SpikeOut/resources/spikeout.ico"
 $SPIKEOFE_ICO_URI = "https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/$CurrentBranch/Setup-SpikeOut/resources/spikeofe.ico"
 $SPIKEOUT_CONTROLS_URI = "https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/$CurrentBranch/Setup-SpikeOut/resources/spikeout_controls_howto.jpg"
+$TURBO_MODE_FRAMERATE = 69.0288
 
 # We're leaving the Steam Deck configset ('neptune') out of this since it's unlikely anybody is running Windows and this script on one, also so it possibly doesn't override EmuDeck configurations
 $CONTROLLER_TYPES = @('ps4', 'ps5', 'ps5_edge', 'xboxelite', 'xboxone', 'xbox360', 'switch_pro', 'steamcontroller_gordon', 'generic')
@@ -679,6 +681,28 @@ function Get-TargetFolder {
     return $dirSelect.SelectedPath
 }
 
+function Enable-TurboMode {
+    <#
+        .SYNOPSIS
+            Replaces the refresh rate value in the Supermodel config with the turbo mode framerate
+        .DESCRIPTION
+            Updates the Supermodel config to have the game run at 120% the original speed. Because the original Sega Model 3
+            refresh rate comes down to something like 57.524 Hz, to have it run at 120% speed we need to set it to about
+            69.0288Hz.
+        .PARAMETER SupermodelConfigPath
+            The file path for the Supermodel config
+    #>
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [ValidateScript({ Test-Path $_ })]
+        [string] $SupermodelConfigPath
+    )
+
+    $updatedConfig = (Get-Content -Path $SupermodelConfigPath -Raw).Replace("RefreshRate = 60", "RefreshRate = $TURBO_MODE_FRAMERATE")
+    Out-File -InputObject $updatedConfig -FilePath $SupermodelConfigPath -Force
+}
+
 function Get-LatestSupermodelDownload {
     <#
         .SYNOPSIS
@@ -733,7 +757,7 @@ function Get-LatestSupermodelDownload {
 
     Write-Information 'Extracted Supermodel archive. Removing archive file...'
     Remove-Item -Path $outputPath -Force
-    Write-Information "Successfully deleted archive at '$outputPath'."
+    Write-Information "Successfully deleted archive at '$outputPath'.`n"
 }
 
 function Restart-Steam {
@@ -768,15 +792,29 @@ function New-SpikeOutLaunchOptionSet {
     #>
 
     do {
-        # Add the -throttle option for preventing the emulator from running too fast on displays higher than 60Hz
-        $launchOptions = @('-throttle')
+        $result = @{
+            # Add the -throttle option for preventing the emulator from running too fast on displays higher than 60Hz
+            LaunchOptions = @('-throttle')
+            TurboMode = $false
+        }
+
+        $controlSelection = Read-Choice -Answers @(1, 2) -DefaultAnswer '1' -Prompt @'
+What input method do you want to set up the keybindings for?
+1) (Recommended) (Default) Gamepad/controller
+2) Arcade stick/fightstick/fightpad ()
+
+(NOTE: Keyboard controls will be available regardless of what options you select)
+Enter 1 or 2 to select your option, or leave empty to select keybindings for gamepads by default.
+'@
+        if ($controlSelection -eq 1) { $result.InputMethod = 'Gamepad' }
+        elseif ($controlSelection -eq 2) { $result.InputMethod = 'Fightstick' }
 
         $windowModeSelection = Read-Choice -Answers @(1..3) -DefaultAnswer '1' -Prompt @'
 Which window mode do you want to use for the Supermodel emulator?
 1) Fullscreen (default)
 2) Windowed
 3) Borderless windowed (not recommended, doesn't seem to behave like an actual borderless window)
-Enter a number from 1 to 3 to select your option
+Enter a number from 1 to 3 to select your option, or leave empty to select fullscreen by default.
 '@
 
         switch ($windowModeSelection) {
@@ -784,7 +822,7 @@ Enter a number from 1 to 3 to select your option
             '2' { $windowMode = '-window'; break }
             '3' { $windowMode = '-borderless'; break }
         }
-        $launchOptions += $windowMode
+        $result.LaunchOptions += $windowMode
 
         while ($true) {
             $resolution = Read-Host "`nEnter the desired screen resolution for the Supermodel emulator window separated by a comma (for example: 1920,1080 or 2540,1440 or 1280,720 or 640,480). Leave empty to use the resolution of your current screen"
@@ -792,7 +830,7 @@ Enter a number from 1 to 3 to select your option
             if (($resolution -split ',').Count -eq 2) {
                 # Remove whitespace in strings in case someone decides to enter it like '1920, 1080'
                 $resolution = $resolution.Replace(' ', '')
-                $launchOptions += "-res=$resolution"
+                $result.LaunchOptions += "-res=$resolution"
                 break
             } elseif ([string]::IsNullOrEmpty($resolution)) {
                 break
@@ -801,22 +839,37 @@ Enter a number from 1 to 3 to select your option
             }
         }
 
+        $useTrueHz = Read-Choice -Prompt @"
+Choose what framerate you want to run SpikeOut at (Model 3 game speed is tied to framerate):
+1) 57.524 fps. This is the default framerate that all Model 3 games run at, however this can cause stuttering for some systems or when capturing footage through OBS.
+2) (Recommended) (Default) 60fps. This makes the game run at 104,3% the original speed, but can help fix stuttering issues.
+3) 69,0288fps. This makes the game run at 120% the original speed. Use this if you want to play the game in Turbo Mode.
+
+Enter 1, 2 or 3 to select your option, or leave empty to select 2 by default.
+"@ -Answers @(1..3) -DefaultAnswer '2'
+
+        if ($useTrueHz -eq 1) { $result.LaunchOptions += "-true-hz" }
+        elseif ($useTrueHz -eq 2) { $result.TurboMode = $true}
+
         $useSSAA = Read-Choice -Prompt "`nUse SSAA (supersampling anti-aliasing)? This will reduce jagged edges but will reduce performance.`nEnter a value from 1 to 8 to set SSAA strength, or enter nothing or 0 to disable SSAA" -Answers @(0..8) -DefaultAnswer '0'
-        if ($useSSAA -ne '0') { $launchOptions += "-ss=$useSSAA" }
+        if ($useSSAA -ne '0') { $result.LaunchOptions += "-ss=$useSSAA" }
 
         $useWidescreen = Read-BinaryChoice -Prompt "`nDo you want to enable widescreen hacks for SpikeOut?`n(This lets you see more around you, but can cause unimportant graphical glitches at the sides of the screen) [Y/n]" -YesDefault:$true
-        if ($useWidescreen) { $launchOptions += '-wide-bg', '-wide-screen' }
+        if ($useWidescreen) { $result.LaunchOptions += '-wide-bg', '-wide-screen' }
 
         $useCrtColors = Read-BinaryChoice -Prompt "`nApply ARI/D93 color correction to have the colors more closely resemble what you'd see on CRT displays on actual SpikeOut cabinets? [Y/n]" -YesDefault:$true
-        if ($useCrtColors) { $launchOptions += '-crtcolors=1' }
+        if ($useCrtColors) { $result.LaunchOptions += '-crtcolors=1' }
 
         if ([string]::IsNullOrEmpty($resolution)) { $resolutionResult = 'Default' }
         else { $resolutionResult = $resolution }
 
         $confirmPrompt = @"
 `nSelected following options:
+Input method: $($result.InputMethod)
 Window mode: $windowMode
 Resolution: $resolutionResult
+Use original 57.524Hz framerate: $useTrueHz
+Apply turbo mode: $($result.TurboMode)
 SSAA: $useSSAA
 ARI/D93 CRT color adaptation post processing: $useCrtColors
 Widescreen: $useWidescreen
@@ -828,7 +881,7 @@ Continue with these options? [Y/n]
     } while (-not $confirmOptions)
 
     Write-Information 'You can always later change these launch options by right-clicking on the Steam shortcuts for SpikeOut and going to Properties... -> Shortcut -> Launch Options.'
-    return $launchOptions -join ' '
+    return $result
 }
 
 function New-WindowsShortcut {
@@ -944,7 +997,13 @@ function New-RegularShortcut {
 
     $romPath = Join-Path $SupermodelPath 'ROMs'
     $supermodelExePath = Join-Path $SupermodelPath 'Supermodel.exe'
-    $launchOptions = New-SpikeOutLaunchOptionSet
+    $selectedOptions = New-SpikeOutLaunchOptionSet
+    $launchOptions = $selectedOptions.LaunchOptions -join ' '
+
+    # Set the refresh rate in the Supermodel config to 120% speed if Turbo Mode was selected
+    if ($selectedOptions.TurboMode) {
+        Enable-TurboMode -SupermodelConfigPath $configPath
+    }
 
     # The path to the ROM has to be encased in quotes in case the path contains whitespace
     $spikeoutLaunchOptions = "`"$(Join-Path $romPath 'spikeout.zip')`"" + ' ' + $launchOptions
@@ -1016,7 +1075,14 @@ function New-SteamShortcut {
     # Construct the shortcut options
     $romPath = Join-Path $SupermodelPath 'ROMs'
     $supermodelExePath = Join-Path $SupermodelPath 'Supermodel.exe'
-    $launchOptions = New-SpikeOutLaunchOptionSet
+
+    $selectedOptions = New-SpikeOutLaunchOptionSet
+    $launchOptions = $selectedOptions.LaunchOptions -join ' '
+
+    # Set the refresh rate in the Supermodel config to 120% speed if Turbo Mode was selected
+    if ($selectedOptions.TurboMode) {
+        Enable-TurboMode -SupermodelConfigPath $configPath
+    }
 
     # The path to the ROM has to be encased in quotes in case the path contains whitespace
     $spikeoutLaunchOptions = "`"$(Join-Path $romPath 'spikeout.zip')`"" + ' ' + $launchOptions
@@ -1035,9 +1101,17 @@ function New-SteamShortcut {
     [System.IO.File]::WriteAllBytes($shortcutsPath, (ConvertTo-BinaryVDF $shortcutMap))
     Write-Information 'Successfully added non-Steam game shortcuts for SpikeOut: Digital Battle Online and SpikeOut: Final Edition to your Steam Library.'
 
-    # Download the Steam Input config for SpikeOut and place them in the necessary folders
-    $configDownloadDest = Join-Path $env:TEMP 'supermodel - spikeout gamepad (powershell setup)_0.vdf'
-    Invoke-WebRequest -Method Get -Uri $SPIKEOUT_STEAM_INPUT_CONFIG_URI -OutFile $configDownloadDest
+    # Download the Steam Input config for SpikeOut depending on the selected input method, and place it in the necessary folders
+    if ($selectedOptions.InputMethod -eq 'Fightstick') {
+        Write-Information 'Downloading fightstick input binding configuration file for SpikeOut...'
+        $configDownloadDest = Join-Path $env:TEMP 'supermodel - spikeout fightstickarcade stick (powershell setup)_0.vdf'
+        Invoke-WebRequest -Method Get -Uri $SPIKEOUT_STEAM_INPUT_CONFIG_FIGHTSTICK_URI -OutFile $configDownloadDest
+    }
+    else {
+        Write-Information 'Downloading gamepad input binding configuration file for SpikeOut...'
+        $configDownloadDest = Join-Path $env:TEMP 'supermodel - spikeout gamepad (powershell setup)_0.vdf'
+        Invoke-WebRequest -Method Get -Uri $SPIKEOUT_STEAM_INPUT_CONFIG_GAMEPAD_URI -OutFile $configDownloadDest
+    }
 
     $spikeoutControllerConfigPath = Join-Path $controllerConfigPath 'spikeout digital battle online'
     $spikeofeControllerConfigPath = Join-Path $controllerConfigPath 'spikeout final edition'
@@ -1100,7 +1174,7 @@ function Main {
         $selectedPath = Get-TargetFolder
 
         # Prompt user to download Supermodel emulator
-        $cont = Read-BinaryChoice -Prompt "Download the SEGA Model 3 Supermodel emulator to '$selectedPath'?`n(RECOMMENDED, this is required to be able to play SpikeOut at all. Enter N(o) only if you already have Supermodel downloaded) [Y/n]" -YesDefault:$true
+        $cont = Read-BinaryChoice -Prompt "`nDownload the SEGA Model 3 Supermodel emulator to '$selectedPath'?`n(RECOMMENDED, this is required to be able to play SpikeOut at all. Enter N(o) only if you already have Supermodel downloaded) [Y/n]`n" -YesDefault:$true
         if ($cont) {
             Get-LatestSupermodelDownload -TargetPath $selectedPath -SupermodelUri $BASE_SUPERMODEL_URI
         } else {
