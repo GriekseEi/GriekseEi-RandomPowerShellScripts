@@ -13,7 +13,7 @@ Invoke-RestMethod -Method Get 'https://raw.githubusercontent.com/GriekseEi/Griek
 
 Overview of the custom Steam controller config:
 
-![SpikeOut Steam Input controller configuration](Setup-SpikeOut/resources/spikeout_controls_howto.jpg)
+![SpikeOut Steam Input controller configuration](Setup-SpikeOut/resources/spikeout_controls_howto.webp)
 
 In case you are wondering about the differences between Digital Battle Online and Final Edition, you can find a work-in-progress changelog [here](https://docs.google.com/spreadsheets/d/12M4kS6ubeylQ5QPmV7-dQVB6Q5nLgmJoS43VLE2pOds/edit?usp=sharing).
 
