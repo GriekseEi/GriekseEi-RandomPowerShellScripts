@@ -48,7 +48,10 @@ $SPIKEOUT_STEAM_INPUT_CONFIG_GAMEPAD_URI = "https://raw.githubusercontent.com/Gr
 $SPIKEOUT_STEAM_INPUT_CONFIG_FIGHTSTICK_URI = "https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/$CurrentBranch/Setup-SpikeOut/resources/supermodel%20-%20spikeout%20fightstickarcade%20stick%20(powershell%20setup)_0.vdf"
 $SPIKEOUT_ICO_URI = "https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/$CurrentBranch/Setup-SpikeOut/resources/spikeout.ico"
 $SPIKEOFE_ICO_URI = "https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/$CurrentBranch/Setup-SpikeOut/resources/spikeofe.ico"
-$SPIKEOUT_CONTROLS_URI = "https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/$CurrentBranch/Setup-SpikeOut/resources/spikeout_controls_howto.jpg"
+$SPIKEOUT_GAMEPAD_CONTROLS_URI = "https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/$CurrentBranch/Setup-SpikeOut/resources/spikeout_controls_howto_gamepad.webp"
+$SPIKEOUT_FIGHTSTICK_CONTROLS_URI = "https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/$CurrentBranch/Setup-SpikeOut/resources/spikeout_controls_howto_fightstick.webp"
+$GAMEPAD_CONFIG_NAME = "supermodel - spikeout gamepad (powershell setup)_0"
+$FIGHTSTICK_CONFIG_NAME = "supermodel - spikeout fightstickarcade stick (powershell setup)_0"
 $TURBO_MODE_FRAMERATE = 69.0288
 
 # We're leaving the Steam Deck configset ('neptune') out of this since it's unlikely anybody is running Windows and this script on one, also so it possibly doesn't override EmuDeck configurations
@@ -445,11 +448,17 @@ function Set-DefaultControllerConfigTemplate {
             Updates the given config set to use the SpikeOut config templates as default for SpikeOut
         .PARAMETER ConfigSetPath
             The path to the config set to update or create if it doesn't exist yet
+        .PARAMETER ConfigName
+            The name of the Steam Input config
     #>
     param(
         [Parameter(Mandatory)]
         [ValidateNotNullOrEmpty()]
-        [string] $ConfigSetPath
+        [string] $ConfigSetPath,
+
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string] $ConfigName
     )
 
     # Create a default config set for the given controller if one doesn't exist yet
@@ -457,10 +466,10 @@ function Set-DefaultControllerConfigTemplate {
         $defaultConfigSet = [ordered]@{
             '"controller_config"' = [ordered]@{
                 '"spikeout digital battle online"' = [ordered]@{
-                    '"template"' = '"CLOUD_spikeout digital battle online/supermodel - spikeout gamepad (powershell setup)_0"'
+                    '"template"' = "`"CLOUD_spikeout digital battle online/$ConfigName`""
                 }
                 '"spikeout final edition"'         = [ordered]@{
-                    '"template"' = '"CLOUD_spikeout final edition/supermodel - spikeout gamepad (powershell setup)_0"'
+                    '"template"' = "`"CLOUD_spikeout final edition/$ConfigName`""
                 }
             }
         }
@@ -478,11 +487,11 @@ function Set-DefaultControllerConfigTemplate {
     }
 
     $configSet['"controller_config"']['"spikeout digital battle online"'] = [ordered]@{
-        '"template"' = '"CLOUD_spikeout digital battle online/supermodel - spikeout gamepad (powershell setup)_0"'
+        '"template"' = "`"CLOUD_spikeout digital battle online/$ConfigName`""
     }
 
     $configSet['"controller_config"']['"spikeout final edition"'] = [ordered]@{
-        '"template"' = '"CLOUD_spikeout final edition/supermodel - spikeout gamepad (powershell setup)_0"'
+        '"template"' = "`"CLOUD_spikeout final edition/$ConfigName`""
     }
 
     [IO.File]::WriteAllText($ConfigSetPath, (ConvertTo-VDF $configSet))
@@ -501,7 +510,7 @@ function Add-NonSteamGameShortcut {
 
         [Parameter(Mandatory)]
         [ValidateScript({ (Test-Path -Path $_ -IsValid) })]
-        [string] $ExeLocation,
+        [string] $TargetLocation,
 
         [ValidateScript({ Test-Path -Path $_ -IsValid })]
         [string] $StartDir = '',
@@ -560,7 +569,7 @@ function Add-NonSteamGameShortcut {
     $newShortcut = [ordered]@{}
     $newShortcut['AppName'] = $AppName
     $newShortcut['appid'] = $appId
-    $newShortcut['exe'] = "`"$ExeLocation`""
+    $newShortcut['exe'] = "`"$TargetLocation`""
     $newShortcut['StartDir'] = "`"$StartDir`""
     $newShortcut['icon'] = "`"$IconLocation`""
     $newShortcut['LaunchOptions'] = $LaunchOptions
@@ -798,24 +807,24 @@ function New-SpikeOutLaunchOptionSet {
             TurboMode = $false
         }
 
-        $controlSelection = Read-Choice -Answers @(1, 2) -DefaultAnswer '1' -Prompt @'
-What input method do you want to set up the keybindings for?
-1) (Recommended) (Default) Gamepad/controller
-2) Arcade stick/fightstick/fightpad ()
+        $controlSelection = Read-Choice -Answers @(1, 2) -DefaultAnswer '1' -Prompt @"
+`nWhat controller type do you want to set up the keybindings for?
+1) Gamepad (RECOMMENDED, more inputs to control the emulator are available using the gamepad)
+2) Arcade stick/fightstick/fightpad
 
 (NOTE: Keyboard controls will be available regardless of what options you select)
-Enter 1 or 2 to select your option, or leave empty to select keybindings for gamepads by default.
-'@
+Enter 1 or 2 to select your option, or leave empty to select keybindings for gamepads by default
+"@
         if ($controlSelection -eq 1) { $result.InputMethod = 'Gamepad' }
         elseif ($controlSelection -eq 2) { $result.InputMethod = 'Fightstick' }
 
-        $windowModeSelection = Read-Choice -Answers @(1..3) -DefaultAnswer '1' -Prompt @'
-Which window mode do you want to use for the Supermodel emulator?
+        $windowModeSelection = Read-Choice -Answers @(1..3) -DefaultAnswer '1' -Prompt @"
+`nWhich window mode do you want to use for the Supermodel emulator?
 1) Fullscreen (default)
 2) Windowed
 3) Borderless windowed (not recommended, doesn't seem to behave like an actual borderless window)
-Enter a number from 1 to 3 to select your option, or leave empty to select fullscreen by default.
-'@
+Enter a number from 1 to 3 to select your option, or leave empty to select fullscreen by default
+"@
 
         switch ($windowModeSelection) {
             '1' { $windowMode = '-fullscreen'; break }
@@ -840,7 +849,7 @@ Enter a number from 1 to 3 to select your option, or leave empty to select fulls
         }
 
         $useTrueHz = Read-Choice -Prompt @"
-Choose what framerate you want to run SpikeOut at (Model 3 game speed is tied to framerate):
+`nChoose what framerate you want to run SpikeOut at (Model 3 game speed is tied to framerate):
 1) 57.524 fps. This is the default framerate that all Model 3 games run at, however this can cause stuttering for some systems or when capturing footage through OBS.
 2) (Recommended) (Default) 60fps. This makes the game run at 104,3% the original speed, but can help fix stuttering issues.
 3) 69,0288fps. This makes the game run at 120% the original speed. Use this if you want to play the game in Turbo Mode.
@@ -888,7 +897,7 @@ function New-WindowsShortcut {
     <#
         .SYNOPSIS
             Creates a new Windows shortcut using the Windows Script Host
-        .PARAMETER ExeLocation
+        .PARAMETER TargetLocation
             The location of the .exe the shortcut points to
         .PARAMETER IconLocation
             The location of the .ico file for the shortcut
@@ -906,7 +915,7 @@ function New-WindowsShortcut {
     param(
         [Parameter(Mandatory)]
         [ValidateNotNullOrEmpty()]
-        [string] $ExeLocation,
+        [string] $TargetLocation,
 
         [Parameter(Mandatory)]
         [ValidateNotNullOrEmpty()]
@@ -927,7 +936,7 @@ function New-WindowsShortcut {
 
     $WScriptShell = New-Object -ComObject WScript.Shell
     $shortcut = $WScriptShell.CreateShortcut($ShortcutLocation)
-    $shortcut.TargetPath = "$ExeLocation"
+    $shortcut.TargetPath = "$TargetLocation"
     $shortcut.IconLocation = "$IcoLocation"
     $shortcut.Arguments = $LaunchOptions
     $shortcut.WorkingDirectory = "$WorkingDirectory"
@@ -996,7 +1005,7 @@ function New-RegularShortcut {
     Write-Information 'Replaced Supermodel config file with optimized control setup.'
 
     $romPath = Join-Path $SupermodelPath 'ROMs'
-    $supermodelExePath = Join-Path $SupermodelPath 'Supermodel.exe'
+    $supermodelLauncherPath = Join-Path $SupermodelPath "Supermodel.exe"
     $selectedOptions = New-SpikeOutLaunchOptionSet
     $launchOptions = $selectedOptions.LaunchOptions -join ' '
 
@@ -1014,8 +1023,8 @@ function New-RegularShortcut {
     $spikeoutIcoPath = Get-Icon -IconsPath $icoDirPath -IconName 'spikeout.ico' -IconUri $SPIKEOUT_ICO_URI
     $spikeofeIcoPath = Get-Icon -IconsPath $icoDirPath -IconName 'spikeofe.ico' -IconUri $SPIKEOFE_ICO_URI
 
-    New-WindowsShortcut -WorkingDirectory $SupermodelPath -ExeLocation $supermodelExePath -IcoLocation $spikeoutIcoPath -LaunchOptions $spikeoutLaunchOptions -ShortcutLocation (Join-Path $SupermodelPath 'SpikeOut Digital Battle Online.lnk') -CopyToDesktop
-    New-WindowsShortcut -WorkingDirectory $SupermodelPath -ExeLocation $supermodelExePath -IcoLocation $spikeofeIcoPath -LaunchOptions $spikeofeLaunchOptions -ShortcutLocation (Join-Path $SupermodelPath 'SpikeOut Final Edition.lnk') -CopyToDesktop
+    New-WindowsShortcut -WorkingDirectory $SupermodelPath -TargetLocation $supermodelLauncherPath -IcoLocation $spikeoutIcoPath -LaunchOptions $spikeoutLaunchOptions -ShortcutLocation (Join-Path $SupermodelPath 'SpikeOut Digital Battle Online.lnk') -CopyToDesktop
+    New-WindowsShortcut -WorkingDirectory $SupermodelPath -TargetLocation $supermodelLauncherPath -IcoLocation $spikeofeIcoPath -LaunchOptions $spikeofeLaunchOptions -ShortcutLocation (Join-Path $SupermodelPath 'SpikeOut Final Edition.lnk') -CopyToDesktop
 
     Write-Information 'Operation successful! Remember that you can always change the Supermodel options by editing the launch options in the SpikeOut shortcut properties.'
 }
@@ -1074,7 +1083,7 @@ function New-SteamShortcut {
 
     # Construct the shortcut options
     $romPath = Join-Path $SupermodelPath 'ROMs'
-    $supermodelExePath = Join-Path $SupermodelPath 'Supermodel.exe'
+    $supermodelLauncherPath = Join-Path $SupermodelPath "Supermodel.exe"
 
     $selectedOptions = New-SpikeOutLaunchOptionSet
     $launchOptions = $selectedOptions.LaunchOptions -join ' '
@@ -1094,8 +1103,8 @@ function New-SteamShortcut {
     $spikeofeIcoPath = Get-Icon -IconsPath $icoDirPath -IconName 'spikeofe.ico' -IconUri $SPIKEOFE_ICO_URI
 
     # Add the new SpikeOut shortcuts to the shortcuts map
-    $null = Add-NonSteamGameShortcut -Map $shortcutMap -AppName 'SpikeOut: Digital Battle Online' -ExeLocation $supermodelExePath -StartDir $SupermodelPath -LaunchOptions $spikeoutLaunchOptions -IconLocation $spikeoutIcoPath -AllowOverlay:$true -AllowDesktopConfig:$true
-    $null = Add-NonSteamGameShortcut -Map $shortcutMap -AppName 'SpikeOut: Final Edition' -ExeLocation $supermodelExePath -StartDir $SupermodelPath -LaunchOptions $spikeofeLaunchOptions -IconLocation $spikeofeIcoPath -AllowOverlay:$true -AllowDesktopConfig:$true
+    $null = Add-NonSteamGameShortcut -Map $shortcutMap -AppName 'SpikeOut: Digital Battle Online' -TargetLocation $supermodelLauncherPath -StartDir $SupermodelPath -LaunchOptions $spikeoutLaunchOptions -IconLocation $spikeoutIcoPath -AllowOverlay:$true -AllowDesktopConfig:$true
+    $null = Add-NonSteamGameShortcut -Map $shortcutMap -AppName 'SpikeOut: Final Edition' -TargetLocation $supermodelLauncherPath -StartDir $SupermodelPath -LaunchOptions $spikeofeLaunchOptions -IconLocation $spikeofeIcoPath -AllowOverlay:$true -AllowDesktopConfig:$true
 
     # Export changes to shortcuts.vdf
     [System.IO.File]::WriteAllBytes($shortcutsPath, (ConvertTo-BinaryVDF $shortcutMap))
@@ -1103,13 +1112,19 @@ function New-SteamShortcut {
 
     # Download the Steam Input config for SpikeOut depending on the selected input method, and place it in the necessary folders
     if ($selectedOptions.InputMethod -eq 'Fightstick') {
+        $selectedController = $FIGHTSTICK_CONFIG_NAME
+        $selectedLayoutImage = $SPIKEOUT_FIGHTSTICK_CONTROLS_URI
+
         Write-Information 'Downloading fightstick input binding configuration file for SpikeOut...'
-        $configDownloadDest = Join-Path $env:TEMP 'supermodel - spikeout fightstickarcade stick (powershell setup)_0.vdf'
+        $configDownloadDest = Join-Path $env:TEMP "$FIGHTSTICK_CONFIG_NAME.vdf"
         Invoke-WebRequest -Method Get -Uri $SPIKEOUT_STEAM_INPUT_CONFIG_FIGHTSTICK_URI -OutFile $configDownloadDest
     }
     else {
+        $selectedController = $GAMEPAD_CONFIG_NAME
+        $selectedLayoutImage = $SPIKEOUT_GAMEPAD_CONTROLS_URI
+
         Write-Information 'Downloading gamepad input binding configuration file for SpikeOut...'
-        $configDownloadDest = Join-Path $env:TEMP 'supermodel - spikeout gamepad (powershell setup)_0.vdf'
+        $configDownloadDest = Join-Path $env:TEMP "$GAMEPAD_CONFIG_NAME.vdf"
         Invoke-WebRequest -Method Get -Uri $SPIKEOUT_STEAM_INPUT_CONFIG_GAMEPAD_URI -OutFile $configDownloadDest
     }
 
@@ -1135,7 +1150,7 @@ function New-SteamShortcut {
     # For the config set of each controller types, set the default config for SpikeOut DBO/FE to use our custom Steam Input config
     foreach ($controllerType in $CONTROLLER_TYPES) {
         $configSetPath = Join-Path $controllerConfigPath "configset_controller_$controllerType.vdf"
-        Set-DefaultControllerConfigTemplate -ConfigSetPath $configSetPath
+        Set-DefaultControllerConfigTemplate -ConfigSetPath $configSetPath -ConfigName $selectedController
     }
 
     # Prompt user to restart Steam
@@ -1144,7 +1159,7 @@ function New-SteamShortcut {
 
     # Show user the Steam control setup for SpikeOut
     Write-Information 'Opening an image in your browser on the SpikeOut control scheme...'
-    Start-Process $SPIKEOUT_CONTROLS_URI
+    Start-Process $selectedLayoutImage
 
     Write-Warning @"
 The SpikeOut shortcuts should be working fine now, but you will have to manually enable Steam Input for the new shortcuts to have the SpikeOut controller config take effect. To do so:

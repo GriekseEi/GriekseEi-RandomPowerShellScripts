@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2025-4-3
+
+### Added
+
+- Added a prompt for whether to run Supermodel at the true Model 3 framerate (~57.524Hz) or 60fps (i.e. 104,3% the original game speed, or what the default option in previous versions was)
+- Added a prompt for whether to run Supermodel in Turbo Mode (120% game speed)
+- Added the option to select a control setup for fightsticks/arcade sticks/fight pads
+
+### Changed
+
+- Added extra line breaks between printing certain prompts to improve readability when running the script
+- Changed control layout example images from JPG to WebP to save a little bit of space
+- Updated README.md to add headings between sections and add the fightstick layout image
+
 ## [1.0.2] - 2024-15-11
 
 ### Fixed
