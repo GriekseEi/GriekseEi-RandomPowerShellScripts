@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Disabled vertical sync in default Supermodel settings to make turbo mode work
 - Added extra line breaks between printing certain prompts to improve readability when running the script
 - Changed control layout example images from JPG to WebP to save a little bit of space
 - Updated README.md to add headings between sections and add the fightstick layout image

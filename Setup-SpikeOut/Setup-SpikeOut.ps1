@@ -43,7 +43,8 @@ $SCRIPT_VERSION = [version]'1.0.3'
 $CurrentBranch = 'feature/add_truehz'  # This is only really used for debugging and testing
 $BASE_SUPERMODEL_URI = 'https://supermodel3.com/'
 $SUPERMODEL_STEAM_CONFIG_URI = "https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/$CurrentBranch/Setup-SpikeOut/resources/steamconfig/Supermodel.ini"
-$SUPERMODEL_NONSTEAM_CONFIG_URI = "https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/$CurrentBranch/Setup-SpikeOut/resources/nonsteamconfig/Supermodel.ini"
+$SUPERMODEL_NONSTEAM_GAMEPAD_CONFIG_URI = "https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/$CurrentBranch/Setup-SpikeOut/resources/nonsteamconfig_gamepad/Supermodel.ini"
+$SUPERMODEL_NONSTEAM_FIGHTSTICK_CONFIG_URI = "https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/$CurrentBranch/Setup-SpikeOut/resources/nonsteamconfig_fightstick/Supermodel.ini"
 $SPIKEOUT_STEAM_INPUT_CONFIG_GAMEPAD_URI = "https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/$CurrentBranch/Setup-SpikeOut/resources/supermodel%20-%20spikeout%20gamepad%20(powershell%20setup)_0.vdf"
 $SPIKEOUT_STEAM_INPUT_CONFIG_FIGHTSTICK_URI = "https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/$CurrentBranch/Setup-SpikeOut/resources/supermodel%20-%20spikeout%20fightstickarcade%20stick%20(powershell%20setup)_0.vdf"
 $SPIKEOUT_ICO_URI = "https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/$CurrentBranch/Setup-SpikeOut/resources/spikeout.ico"
@@ -710,6 +711,7 @@ function Enable-TurboMode {
 
     $updatedConfig = (Get-Content -Path $SupermodelConfigPath -Raw).Replace("RefreshRate = 60", "RefreshRate = $TURBO_MODE_FRAMERATE")
     Out-File -InputObject $updatedConfig -FilePath $SupermodelConfigPath -Force
+    Write-Information "Updated Supermodel.ini to use turbo mode"
 }
 
 function Get-LatestSupermodelDownload {
@@ -854,11 +856,11 @@ Enter a number from 1 to 3 to select your option, or leave empty to select fulls
 2) (Recommended) (Default) 60fps. This makes the game run at 104,3% the original speed, but can help fix stuttering issues.
 3) 69,0288fps. This makes the game run at 120% the original speed. Use this if you want to play the game in Turbo Mode.
 
-Enter 1, 2 or 3 to select your option, or leave empty to select 2 by default.
+Enter 1, 2 or 3 to select your option, or leave empty to select 2 by default
 "@ -Answers @(1..3) -DefaultAnswer '2'
 
         if ($useTrueHz -eq 1) { $result.LaunchOptions += "-true-hz" }
-        elseif ($useTrueHz -eq 2) { $result.TurboMode = $true}
+        elseif ($useTrueHz -eq 3) { $result.TurboMode = $true}
 
         $useSSAA = Read-Choice -Prompt "`nUse SSAA (supersampling anti-aliasing)? This will reduce jagged edges but will reduce performance.`nEnter a value from 1 to 8 to set SSAA strength, or enter nothing or 0 to disable SSAA" -Answers @(0..8) -DefaultAnswer '0'
         if ($useSSAA -ne '0') { $result.LaunchOptions += "-ss=$useSSAA" }
@@ -877,11 +879,11 @@ Enter 1, 2 or 3 to select your option, or leave empty to select 2 by default.
 Input method: $($result.InputMethod)
 Window mode: $windowMode
 Resolution: $resolutionResult
-Use original 57.524Hz framerate: $useTrueHz
-Apply turbo mode: $($result.TurboMode)
-SSAA: $useSSAA
+Use original 57.524Hz framerate: $($useTrueHz -eq 2)
+Enable turbo mode: $($result.TurboMode)
+SSAA level: $useSSAA
 ARI/D93 CRT color adaptation post processing: $useCrtColors
-Widescreen: $useWidescreen
+Widescreen hacks: $useWidescreen
 
 Continue with these options? [Y/n]
 "@
@@ -999,15 +1001,21 @@ function New-RegularShortcut {
 
     Write-Information 'Building Windows shortcuts for SpikeOut: Digital Battle Online and SpikeOut: Final Edition...'
 
-    # Download an optimized standard Supermodel config.
-    $configPath = [IO.Path]::Combine($SupermodelPath, 'Config', 'Supermodel.ini')
-    Invoke-WebRequest -Method Get -Uri $SUPERMODEL_NONSTEAM_CONFIG_URI -OutFile $configPath
-    Write-Information 'Replaced Supermodel config file with optimized control setup.'
-
     $romPath = Join-Path $SupermodelPath 'ROMs'
     $supermodelLauncherPath = Join-Path $SupermodelPath "Supermodel.exe"
     $selectedOptions = New-SpikeOutLaunchOptionSet
     $launchOptions = $selectedOptions.LaunchOptions -join ' '
+
+    if ($selectedOptions.InputMethod -eq 'Fightstick') {
+        $selectedInputConfig = $SUPERMODEL_NONSTEAM_FIGHTSTICK_CONFIG_URI
+    } else {
+        $selectedInputConfig = $SUPERMODEL_NONSTEAM_GAMEPAD_CONFIG_URI
+    }
+
+    # Download an optimized standard Supermodel config.
+    $configPath = [IO.Path]::Combine($SupermodelPath, 'Config', 'Supermodel.ini')
+    Invoke-WebRequest -Method Get -Uri $selectedInputConfig -OutFile $configPath
+    Write-Information 'Replaced Supermodel config file with optimized control setup.'
 
     # Set the refresh rate in the Supermodel config to 120% speed if Turbo Mode was selected
     if ($selectedOptions.TurboMode) {
