@@ -1222,7 +1222,7 @@ function Main {
         $cont = Read-Choice -Answers @(1, 2) -DefaultAnswer '1' -Prompt @'
 Select how you want to create your SpikeOut shortcuts:
 1) (RECOMMENDED) Create shortcuts for SpikeOut in your Steam library. This also sets up a custom Steam Input config with some useful macros, that are also likely to work on all types of controllers.
-2) Create standard Windows shortcuts. Uses XInput as an input system, and certain macros (pausing the emulator, savestate control, and a macro for special attacks) won't be available on your controller.
+2) Create standard Windows shortcuts. Uses XInput as an input system, and certain macros (pausing the emulator, savestate control) won't be available on your controller.
 
 Enter a number (1, 2) to select your option
 '@
