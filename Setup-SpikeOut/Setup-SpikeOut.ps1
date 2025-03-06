@@ -40,7 +40,7 @@ $ErrorActionPreference = 'Stop'
 $SCRIPT_VERSION = [version]'1.0.3'
 
 # URLs for various resources we need to download
-$CurrentBranch = 'feature/add_truehz'  # This is only really used for debugging and testing
+$CurrentBranch = 'main'  # This is only really used for debugging and testing
 $BASE_SUPERMODEL_URI = 'https://supermodel3.com/'
 $SUPERMODEL_STEAM_CONFIG_URI = "https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/$CurrentBranch/Setup-SpikeOut/resources/steamconfig/Supermodel.ini"
 $SUPERMODEL_NONSTEAM_GAMEPAD_CONFIG_URI = "https://raw.githubusercontent.com/GriekseEi/GriekseEi-RandomPowerShellScripts/refs/heads/$CurrentBranch/Setup-SpikeOut/resources/nonsteamconfig_gamepad/Supermodel.ini"
@@ -710,8 +710,10 @@ function Enable-TurboMode {
     )
 
     $updatedConfig = (Get-Content -Path $SupermodelConfigPath -Raw).Replace("RefreshRate = 60", "RefreshRate = $TURBO_MODE_FRAMERATE")
+
+    # We have to update the Supermodel.ini using a New-Item -Force, because in Windows Powershell (5.1) this is somehow the only consistent way to export a string to a file with UTF-8 encoding WITHOUT a BOM
+    # Doing this with Out-File or Set-Content adds a BOM even if you specify UTF8 encoding, which messes up what Supermodel expects in its configuration
     $null = New-Item -Path $SupermodelConfigPath -Force -Value ($updatedConfig)
-    # Out-File -InputObject $updatedConfig -FilePath $SupermodelConfigPath -Force -Encoding utf8
     Write-Information "Updated Supermodel.ini to use turbo mode"
 }
 
