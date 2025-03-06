@@ -710,7 +710,8 @@ function Enable-TurboMode {
     )
 
     $updatedConfig = (Get-Content -Path $SupermodelConfigPath -Raw).Replace("RefreshRate = 60", "RefreshRate = $TURBO_MODE_FRAMERATE")
-    Out-File -InputObject $updatedConfig -FilePath $SupermodelConfigPath -Force
+    $null = New-Item -Path $SupermodelConfigPath -Force -Value ($updatedConfig)
+    # Out-File -InputObject $updatedConfig -FilePath $SupermodelConfigPath -Force -Encoding utf8
     Write-Information "Updated Supermodel.ini to use turbo mode"
 }
 
