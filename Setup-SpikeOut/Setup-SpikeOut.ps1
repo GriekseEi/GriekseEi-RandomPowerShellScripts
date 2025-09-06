@@ -54,7 +54,7 @@ $SPIKEOUT_FIGHTSTICK_CONTROLS_URI = "https://raw.githubusercontent.com/GriekseEi
 $GAMEPAD_CONFIG_NAME = "supermodel - spikeout gamepad (powershell setup)_0"
 $FIGHTSTICK_CONFIG_NAME = "supermodel - spikeout fightstickarcade stick (powershell setup)_0"
 $TURBO_MODE_FRAMERATE = 69.0288
-$SUPERMODEL_MIRROR_URI = 'https://api.github.com/repos/DirtBagXon/model3emu-code-sinden/releases/latest'
+$SUPERMODEL_MIRROR_URI = 'https://api.github.com/repos/GriekseEi/supermodel-builds/releases/latest'
 
 # We're leaving the Steam Deck configset ('neptune') out of this since it's unlikely anybody is running Windows and this script on one, also so it possibly doesn't override EmuDeck configurations
 $CONTROLLER_TYPES = @('ps4', 'ps5', 'ps5_edge', 'xboxelite', 'xboxone', 'xbox360', 'switch_pro', 'steamcontroller_gordon', 'generic')
@@ -727,9 +727,9 @@ function Get-LatestSupermodelDownload {
         .PARAMETER SupermodelUri
             The URI for the homepage of the Supermodel emulator
         .PARAMETER SupermodelMirrorUri
-            A mirror URI for the latest Supermodel builds. Currently points to a Supermodel fork for Sinden lightgun support. See: https://github.com/DirtBagXon/model3emu-code-sinden
+            A mirror URI for the latest Supermodel builds. Currently points to: https://github.com/GriekseEi/supermodel-builds
         .EXAMPLE
-            PS> Get-LatestSupermodelDownload -TargetPath $HOME/Supermodel -SupermodelUri 'https://supermodel3.com/' -SupermodelMirrorUri 'https://api.github.com/repos/DirtBagXon/model3emu-code-sinden/releases/latest'
+            PS> Get-LatestSupermodelDownload -TargetPath $HOME/Supermodel -SupermodelUri 'https://supermodel3.com/' -SupermodelMirrorUri 'https://api.github.com/repos/GriekseEi/supermodel-builds/releases/latest'
 
             Downloads and unzips the latest Supermodel build to $HOME/Supermodel
     #>

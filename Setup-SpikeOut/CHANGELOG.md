@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Added a mirror download mechanism that will try to download the last Supermodel builds from the [model3emu-code-sinden fork](https://github.com/DirtBagXon/model3emu-code-sinden) for when the Supermodel homepage is down or inaccassible. This fork is usually up to date with the latest Supermodel commit and has regular builds available for all platforms.
+- Added a mirror download mechanism that, in case the Supermodel homepage is down or inaccessible,
+will try to download the latest Supermodel build from my [mirror build repo](https://github.com/GriekseEi/supermodel-builds) instead.
 
 ### Changed
 
