@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.4] - 2025-6-9
+
+### Added
+
+- Added a mirror download mechanism that will try to download the last Supermodel builds from the [model3emu-code-sinden fork](https://github.com/DirtBagXon/model3emu-code-sinden) for when the Supermodel homepage is down or inaccassible. This fork is usually up to date with the latest Supermodel commit and has regular builds available for all platforms.
+
+### Changed
+
+- Updated anti-aliasing setting prompt to recommend against enabling it, as enabling it will tank the performance on even higher-end machines.
+
 ## [1.0.3] - 2025-6-3
 
 ### Added

@@ -37,7 +37,7 @@ $ErrorActionPreference = 'Stop'
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$SCRIPT_VERSION = [version]'1.0.3'
+$SCRIPT_VERSION = [version]'1.0.4'
 
 # URLs for various resources we need to download
 $CurrentBranch = 'main'  # This is only really used for debugging and testing
@@ -54,6 +54,7 @@ $SPIKEOUT_FIGHTSTICK_CONTROLS_URI = "https://raw.githubusercontent.com/GriekseEi
 $GAMEPAD_CONFIG_NAME = "supermodel - spikeout gamepad (powershell setup)_0"
 $FIGHTSTICK_CONFIG_NAME = "supermodel - spikeout fightstickarcade stick (powershell setup)_0"
 $TURBO_MODE_FRAMERATE = 69.0288
+$SUPERMODEL_MIRROR_URI = 'https://api.github.com/repos/DirtBagXon/model3emu-code-sinden/releases/latest'
 
 # We're leaving the Steam Deck configset ('neptune') out of this since it's unlikely anybody is running Windows and this script on one, also so it possibly doesn't override EmuDeck configurations
 $CONTROLLER_TYPES = @('ps4', 'ps5', 'ps5_edge', 'xboxelite', 'xboxone', 'xbox360', 'switch_pro', 'steamcontroller_gordon', 'generic')
@@ -725,8 +726,10 @@ function Get-LatestSupermodelDownload {
             The path to where we want to download and setup Supermodel
         .PARAMETER SupermodelUri
             The URI for the homepage of the Supermodel emulator
+        .PARAMETER SupermodelMirrorUri
+            A mirror URI for the latest Supermodel builds. Currently points to a Supermodel fork for Sinden lightgun support. See: https://github.com/DirtBagXon/model3emu-code-sinden
         .EXAMPLE
-            PS> Get-LatestSupermodelDownload -TargetPath $HOME/Supermodel -SupermodelUri 'https://supermodel3.com/'
+            PS> Get-LatestSupermodelDownload -TargetPath $HOME/Supermodel -SupermodelUri 'https://supermodel3.com/' -SupermodelMirrorUri 'https://api.github.com/repos/DirtBagXon/model3emu-code-sinden/releases/latest'
 
             Downloads and unzips the latest Supermodel build to $HOME/Supermodel
     #>
@@ -737,29 +740,55 @@ function Get-LatestSupermodelDownload {
 
         [Parameter(Mandatory)]
         [ValidateNotNullOrEmpty()]
-        [string] $SupermodelUri
+        [string] $SupermodelUri,
+
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string] $SupermodelMirrorUri
     )
 
     Write-Information "Checking $SupermodelUri for the newest download..."
 
-    $page = Invoke-WebRequest -Method Get -Uri ($SupermodelUri + 'Download.html') -UseBasicParsing
-
-    # The link for the newest Windows build should NORMALLY be the first entry in the list of href links of the Download page that contains 'Supermodel_'
-    $uriPart = ($page.Links.href | Where-Object { $_ -match 'Supermodel_' })[0]
-    if ([string]::IsNullOrEmpty($uriPart)) {
-        throw [System.InvalidOperationException] "Could not parse download link of latest Supermodel build at $($SupermodelUri + 'Download.html')"
+    $failedMainSupermodelDownload = $false
+    try {
+        $page = Invoke-WebRequest -Method Get -Uri ($SupermodelUri + 'Download.html') -UseBasicParsing
+    } catch {
+        $failedMainSupermodelDownload = $true
+        Write-Warning "The Supermodel homepage at $SupermodelUri is either down or inaccessible. Retrying download using mirror at $SupermodelMirrorUri ..."
     }
 
-    $downloadUri = $SupermodelUri + $uriPart
-    $extension = [System.IO.Path]::GetExtension($downloadUri)
-    $outputPath = Join-Path $TargetPath ('supermodel' + $extension)
+    if (-not $failedMainSupermodelDownload) {
+        # The link for the newest Windows build should NORMALLY be the first entry in the list of href links of the Download page that contains 'Supermodel_'
+        $uriPart = ($page.Links.href | Where-Object { $_ -match 'Supermodel_' })[0]
+        if ([string]::IsNullOrEmpty($uriPart)) {
+            throw [System.InvalidOperationException] "Could not parse download link of latest Supermodel build at $($SupermodelUri + 'Download.html')"
+        }
 
-    if (-not($extension -eq '.zip')) {
-        throw [System.NotSupportedException] 'Latest Supermodel build appears to not be a ZIP file. This script only supports dealing with ZIP files.'
+        $downloadUri = $SupermodelUri + $uriPart
+        $extension = [System.IO.Path]::GetExtension($downloadUri)
+        $outputPath = Join-Path $TargetPath ('supermodel' + $extension)
+
+        if (-not($extension -eq '.zip')) {
+            throw [System.NotSupportedException] 'Latest Supermodel build appears to not be a ZIP file. This script only supports dealing with ZIP files.'
+        }
+
+        Write-Information "Found newest version at '$downloadUri'. Downloading it to '$outputPath'..."
+        Invoke-WebRequest -Method Get -Uri $downloadUri -OutFile $outputPath
+    } else {
+        $latestRelease = ((Invoke-WebRequest -Method Get -Uri $SupermodelMirrorUri).assets | Where-Object name -like 'supermodel-Windows*').browser_download_url
+
+        if ([string]::IsNullOrEmpty($latestRelease)) {
+            throw [System.InvalidOperationException] "Could not parse download link of latest Supermodel Sinden fork release at $SupermodelMirrorUri"
+        }
+
+        if (-not(([System.IO.Path]::GetExtension($latestRelease)) -eq '.zip')) {
+            throw [System.NotSupportedException] 'Latest Supermodel Sinden build appears to not be a ZIP file. This script only supports dealing with ZIP files.'
+        }
+
+        Write-Information "Found newest version at '$latestRelease'. Downloading it to '$outputPath'..."
+        Invoke-WebRequest -Method Get -Uri $latestRelease -OutFile $outputPath
     }
 
-    Write-Information "Found newest version at '$downloadUri'. Downloading it to '$outputPath'..."
-    Invoke-WebRequest -Method Get -Uri $downloadUri -OutFile $outputPath
 
     Write-Information 'Download complete! Extracting archive...'
     Expand-Archive -LiteralPath $outputPath -DestinationPath $TargetPath -Force
@@ -865,7 +894,7 @@ Enter 1, 2 or 3 to select your option, or leave empty to select 2 by default
         if ($useTrueHz -eq 1) { $result.LaunchOptions += "-true-hz" }
         elseif ($useTrueHz -eq 3) { $result.TurboMode = $true}
 
-        $useSSAA = Read-Choice -Prompt "`nUse SSAA (supersampling anti-aliasing)? This will reduce jagged edges but will reduce performance.`nEnter a value from 1 to 8 to set SSAA strength, or enter nothing or 0 to disable SSAA" -Answers @(0..8) -DefaultAnswer '0'
+        $useSSAA = Read-Choice -Prompt "`nUse SSAA (supersampling anti-aliasing)? This will reduce jagged edges but will GREATLY reduce performance, even on higher-end machines. It's recommended to keep anti-aliasing disabled.`nEnter a value from 1 to 8 to set SSAA strength, or enter nothing or 0 to disable SSAA" -Answers @(0..8) -DefaultAnswer '0'
         if ($useSSAA -ne '0') { $result.LaunchOptions += "-ss=$useSSAA" }
 
         $useWidescreen = Read-BinaryChoice -Prompt "`nDo you want to enable widescreen hacks for SpikeOut?`n(This lets you see more around you, but can cause unimportant graphical glitches at the sides of the screen) [Y/n]" -YesDefault:$true
@@ -1202,7 +1231,7 @@ function Main {
         # Prompt user to download Supermodel emulator
         $cont = Read-BinaryChoice -Prompt "`nDownload the SEGA Model 3 Supermodel emulator to '$selectedPath'?`n(RECOMMENDED, this is required to be able to play SpikeOut at all. Enter N(o) only if you already have Supermodel downloaded) [Y/n]`n" -YesDefault:$true
         if ($cont) {
-            Get-LatestSupermodelDownload -TargetPath $selectedPath -SupermodelUri $BASE_SUPERMODEL_URI
+            Get-LatestSupermodelDownload -TargetPath $selectedPath -SupermodelUri $BASE_SUPERMODEL_URI -SupermodelMirrorUri $SUPERMODEL_MIRROR_URI
         } else {
             if (-not(Test-Path -Path (Join-Path $selectedPath 'Supermodel.exe'))) {
                 Write-Warning "Rejected download, but could not find existing Supermodel installation at location '$selectedPath'. Aborting script..."
