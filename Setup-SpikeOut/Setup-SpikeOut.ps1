@@ -775,20 +775,22 @@ function Get-LatestSupermodelDownload {
         Write-Information "Found newest version at '$downloadUri'. Downloading it to '$outputPath'..."
         Invoke-WebRequest -Method Get -Uri $downloadUri -OutFile $outputPath
     } else {
-        $latestRelease = ((Invoke-WebRequest -Method Get -Uri $SupermodelMirrorUri).assets | Where-Object name -like 'supermodel-Windows*').browser_download_url
+        $latestRelease = ((Invoke-RestMethod -Method Get -Uri $SupermodelMirrorUri).assets | Where-Object name -like 'supermodel-Windows*').browser_download_url
 
         if ([string]::IsNullOrEmpty($latestRelease)) {
             throw [System.InvalidOperationException] "Could not parse download link of latest Supermodel Sinden fork release at $SupermodelMirrorUri"
         }
 
-        if (-not(([System.IO.Path]::GetExtension($latestRelease)) -eq '.zip')) {
+        $extension = [System.IO.Path]::GetExtension($latestRelease)
+        $outputPath = Join-Path $TargetPath ('supermodel' + $extension)
+
+        if (-not($extension -eq '.zip')) {
             throw [System.NotSupportedException] 'Latest Supermodel Sinden build appears to not be a ZIP file. This script only supports dealing with ZIP files.'
         }
 
         Write-Information "Found newest version at '$latestRelease'. Downloading it to '$outputPath'..."
         Invoke-WebRequest -Method Get -Uri $latestRelease -OutFile $outputPath
     }
-
 
     Write-Information 'Download complete! Extracting archive...'
     Expand-Archive -LiteralPath $outputPath -DestinationPath $TargetPath -Force
