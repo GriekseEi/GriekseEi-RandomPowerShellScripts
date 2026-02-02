@@ -1,3 +1,5 @@
+# ⚠️ THIS REPOSITORY HAS BEEN MIGRATED TO CODEBERG, AND WILL NO LONGER BE UPDATED. TO USE THE NEWEST VERSION OF THIS SCRIPT, PLEASE [CLICK THIS LINK](https://codeberg.org/testamentenjoyment/SpikeOut-Installer). ⚠️
+
 # GriekseEi-RandomPowerShellScripts
 
 ## Setup-SpikeOut.ps1
